@@ -52,7 +52,7 @@ button { color: inherit; }
 
 .brandline { position: relative; z-index: 1; display: flex; align-items: center; gap: 13px; }
 
-.logo { width: 68px; height: 58px; object-fit: contain; mix-blend-mode: multiply; }
+.logo { width: 36px; height: 58px; object-fit: contain; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
 
 .brandline h1 { margin: 0 0 3px; font-family: "STKaiti", "KaiTi", serif; font-size: 28px; color: var(--blue-900); }
 
@@ -76,7 +76,8 @@ button { color: inherit; }
 
 .btn-block { width: 100%; }
 
-.stats-band { display: grid; grid-template-columns: repeat(3, 1fr); padding: 16px 10px; background: var(--blue-900); color: white; }
+.stats-band { display: grid; grid-template-columns: repeat(2, 1fr); padding: 16px 10px; background: var(--blue-900); color: white; justify-items: center; align-items: center; }
+.stats-band > .stat { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
 
 .stat { text-align: center; border-right: 1px solid rgba(255,255,255,.17); }
 
@@ -206,7 +207,67 @@ button { color: inherit; }
 
 .prototype-note { color: var(--muted); font-size: 10px; }
 
+/* 经目子类型分组（部类 → 子类） */
+.sub-group { margin: 0 16px 12px; background: white; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+
+.sub-head { display: flex; align-items: flex-start; gap: 10px; padding: 14px 14px; cursor: pointer; user-select: none; }
+.sub-head-info { flex: 1; min-width: 0; }
+.sub-head-row1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sub-head-row2 { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.sub-tag { display: inline-flex; min-height: 18px; padding: 0 8px; align-items: center; border-radius: 9px; background: var(--blue-100); color: var(--blue-700); font-size: 10px; }
+.sub-name { font-weight: 600; font-size: 14px; color: var(--ink); }
+.sub-total { margin-left: 4px; color: var(--muted); font-size: 11px; }
+.sub-caret { width: 22px; height: 22px; display: grid; place-items: center; color: var(--muted); font-size: 14px; transition: transform .15s ease; flex: none; }
+.sub-caret.open { transform: rotate(180deg); }
+.sub-body { padding: 0 14px 12px; border-top: 1px dashed var(--line); }
+.sub-meta-line { margin: 10px 0; color: var(--muted); font-size: 11px; }
+.sub-body .book-list { gap: 10px; }
+
+/* 子类型头部的全选 checkbox */
+.sub-check { position: relative; width: 22px; height: 22px; flex: none; margin-top: 1px; }
+.sub-check input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.sub-check span { position: absolute; inset: 0; border: 1.5px solid var(--line); border-radius: 6px; background: white; transition: all .15s ease; }
+.sub-check input:checked + span { background: var(--blue-900); border-color: var(--blue-900); }
+.sub-check input:checked + span::after { content: ''; position: absolute; left: 5px; top: 1px; width: 6px; height: 11px; border-right: 2px solid white; border-bottom: 2px solid white; transform: rotate(45deg); }
+.sub-check input:indeterminate + span { background: var(--blue-900); border-color: var(--blue-900); }
+.sub-check input:indeterminate + span::after { content: ''; position: absolute; left: 4px; right: 4px; top: 9px; height: 2px; background: white; border-radius: 1px; }
+
+/* 单张经书卡片的勾选框 */
 .book-card { padding: 15px; cursor: pointer; }
+.book-card.is-checked { border-color: var(--blue-700); box-shadow: 0 0 0 1px var(--blue-700) inset; }
+
+.book-meta { display: flex; justify-content: space-between; gap: 10px; }
+.book-meta-info { min-width: 0; flex: 1; }
+.book-meta-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.book-sub { display: inline-block; margin-top: 4px; padding: 2px 8px; background: var(--blue-100); color: var(--blue-700); border-radius: 9px; font-size: 10px; }
+
+.book-check { position: relative; width: 22px; height: 22px; flex: none; }
+.book-check input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.book-check span { position: absolute; inset: 0; border: 1.5px solid var(--line); border-radius: 6px; background: white; transition: all .15s ease; }
+.book-check input:checked + span { background: var(--blue-900); border-color: var(--blue-900); }
+.book-check input:checked + span::after { content: ''; position: absolute; left: 5px; top: 1px; width: 6px; height: 11px; border-right: 2px solid white; border-bottom: 2px solid white; transform: rotate(45deg); }
+
+/* 经目底部认捐清单条（fixed 在 tabbar 上方，不随页面滚动） */
+.cart-bar { position: fixed; left: 50%; transform: translateX(-50%); width: 390px; max-width: calc(100vw - 32px); bottom: 86px; z-index: 40; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.98); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 -8px 22px rgba(30,55,75,.10); }
+.cart-bar-info { flex: 1; min-width: 0; line-height: 1.3; }
+.cart-bar-count { font-size: 12px; color: var(--muted); }
+.cart-bar-count b { color: var(--ink); font-size: 14px; }
+.cart-bar-total { font-size: 11px; color: var(--muted); }
+.cart-bar-total b { color: var(--gold); font-size: 14px; }
+.cart-bar-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.cart-bar .text-link { font-size: 12px; }
+.cart-bar .btn { padding: 8px 16px; }
+
+/* 批量认捐 sheet 中的清单项 */
+.cart-pledge-list { margin: 10px 0 14px; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--wash); }
+.cart-pledge-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.cart-pledge-row:last-child { border-bottom: 0; }
+.cart-pledge-row span { font-weight: 600; font-size: 13px; }
+.cart-pledge-row small { grid-column: 1 / 2; color: var(--muted); font-size: 11px; }
+.cart-pledge-row b { color: var(--gold); font-family: Georgia, serif; font-size: 13px; }
+
+/* 经目列表底部留白，避免被 cart-bar 遮挡 */
+.sub-section { padding-top: 12px; padding-bottom: 80px; }
 
 .book-meta { display: flex; justify-content: space-between; gap: 10px; }
 
@@ -288,7 +349,9 @@ button { color: inherit; }
 
 .profile-user { display: flex; align-items: center; gap: 13px; }
 
-.profile-avatar { width: 56px; height: 56px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.4); border-radius: 50%; background: rgba(255,255,255,.1); font-family: "STKaiti", serif; font-size: 24px; }
+.profile-avatar { width: 56px; height: 56px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.4); border-radius: 50%; background: rgba(255,255,255,.1); font-family: "STKaiti", serif; font-size: 24px; overflow: hidden; }
+.profile-avatar.profile-avatar-img { padding: 0; background: rgba(255,255,255,.92); color: var(--blue-700, #2c5377); }
+.profile-avatar.profile-avatar-img .profile-avatar-icon { width: 64%; height: 64%; display: block; }
 
 .profile-user h2 { margin: 0 0 4px; font-size: 18px; }
 
@@ -384,7 +447,16 @@ button { color: inherit; }
 
 .sign-tools { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; color: var(--muted); font-size: 11px; }
 
+/* ============ 认捐-常住地区 ============ */
+.address-fields { display: grid; gap: 8px; }
+.address-row { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 8px; }
+.address-tag { color: var(--muted); font-size: 12px; }
+.address-row select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #cfd8df; border-radius: 6px; outline: none; background: white; font-size: 13px; }
+.address-row select:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(45,131,202,.1); }
+
 .amount-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.amount-options-single { grid-template-columns: 1fr; }
+.amount-options-single .amount-option { min-height: 56px; font-size: 18px; }
 
 .amount-option { min-height: 46px; border: 1px solid var(--line); border-radius: 6px; background: white; cursor: pointer; }
 
@@ -442,7 +514,7 @@ button { color: inherit; }
 
 .splash::before { content: none; }
 .splash::after { content: none; }
-.splash-lotus { position: absolute; left: 50%; top: 138px; transform: translateX(-50%); width: 124px; height: 104px; mix-blend-mode: screen; filter: drop-shadow(0 4px 14px rgba(0,0,0,.35)); animation: lotusFloat 4s ease-in-out infinite; }
+.splash-lotus { position: absolute; left: 50%; top: 130px; transform: translateX(-50%); width: 80px; height: 128px; object-fit: contain; filter: drop-shadow(0 6px 16px rgba(0,0,0,.42)); animation: lotusFloat 4s ease-in-out infinite; }
 @keyframes lotusFloat { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -8px); } }
 .splash-top { position: relative; z-index: 2; padding: 26px 24px 0; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: rgba(247,232,194,.7); }
 .splash-top .splash-stamp { padding: 4px 9px; border: 1px solid rgba(247,232,194,.45); font-size: 10px; }
@@ -452,7 +524,8 @@ button { color: inherit; }
 .splash-mid .splash-divider { display: none; }
 .splash-mid .splash-sub { margin: 0; font-family: "STKaiti", serif; font-size: 15px; line-height: 1.8; color: rgba(247,232,194,.85); letter-spacing: 2px; }
 .splash-quote { position: relative; z-index: 2; margin: 22px 24px 0; padding: 14px 16px; text-align: center; font-family: "STKaiti", serif; font-size: 14px; line-height: 1.7; color: rgba(247,232,194,.7); }
-.splash-stats { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, 1fr); margin: 22px 24px 0; padding: 16px 8px; }
+.splash-stats { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(2, 1fr); margin: 22px 24px 0; padding: 16px 8px; gap: 8px; justify-items: center; align-items: center; }
+.splash-stats > div { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
 .splash-stats b { display: block; font-family: Georgia, serif; font-size: 19px; color: #f7e8c2; }
 .splash-stats span { display: block; margin-top: 4px; font-size: 10px; color: rgba(247,232,194,.55); }
 .splash-foot { position: relative; z-index: 2; padding: 0 24px 36px; text-align: center; }
@@ -582,10 +655,13 @@ button { color: inherit; }
 .fund-book { padding: 16px; }
 .fund-book-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
 .fund-book-head strong { font-size: 14px; color: #4a3f30; }
-.fund-book-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 8px; border: 1px solid #ead9b3; background: #fbf5e8; border-radius: 6px; }
-.fund-book-info > div { text-align: center; }
+.fund-book-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 8px; border: 1px solid #ead9b3; background: #fbf5e8; border-radius: 6px; }
+.fund-book-info > div { text-align: left; padding: 4px 6px; }
 .fund-book-info span { display: block; color: #786b58; font-size: 10px; }
-.fund-book-info b { display: block; margin-top: 3px; font-family: Georgia, serif; font-size: 14px; color: #7a5520; }
+.fund-book-info b { display: block; margin-top: 2px; font-family: Georgia, serif; font-size: 14px; color: #7a5520; word-break: break-all; }
+.fund-book-trade { margin-top: 10px; padding: 8px 10px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.fund-book-trade span { color: #786b58; font-size: 11px; }
+.fund-book-trade b { font-family: Consolas, "Courier New", monospace; color: #4a3f30; font-size: 12px; word-break: break-all; text-align: right; }
 
 /* ============ 功德簿信息展示（首页样书 + 预览弹窗） ============ */
 .book-ledger-info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-bottom: 12px; padding: 12px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; }
@@ -594,7 +670,111 @@ button { color: inherit; }
 .bli-row b { color: #4a3f30; font-size: 13px; font-weight: 600; word-break: break-all; }
 .book-ledger-info .bli-row:nth-child(odd) { border-right: 1px dashed #ead9b3; padding-right: 8px; }
 
-/* ---- 修正版新增模块 ---- */
+/* ============ 功德簿左右分栏（左：基础信息 / 右：牌记） ============ */
+.book-ledger-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; }
+.book-ledger-split .book-ledger-info { margin-bottom: 0; }
+.book-ledger-info.book-ledger-info-single { grid-template-columns: 1fr; gap: 10px; padding: 14px; }
+.book-ledger-info.book-ledger-info-single .bli-row { gap: 4px; padding: 0 !important; border-right: 0 !important; }
+.book-ledger-info.book-ledger-info-single .bli-row span { font-size: 11px; letter-spacing: 1px; }
+.book-ledger-info.book-ledger-info-single .bli-row b { font-size: 14px; line-height: 1.5; }
+.book-ledger-paiji { position: relative; display: flex; flex-direction: column; padding: 8px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; }
+.book-ledger-paiji .paiji-img { cursor: zoom-in; }
+.book-ledger-paiji .zoom-hint { margin-top: 6px; text-align: center; }
+.blp-tag { font-family: "STKaiti", serif; font-size: 11px; color: #786b58; letter-spacing: 2px; margin-bottom: 6px; text-align: center; }
+.paiji-img { flex: 1; min-height: 0; width: 100%; height: 100%; object-fit: contain; background: #fffdf7; border-radius: 4px; display: block; }
+@media (max-width: 360px) {
+  .book-ledger-split { grid-template-columns: 1fr; }
+}
+
+/* ============ 图片放大查看 ============ */
+.zoom-overlay { position: absolute; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; background: rgba(8, 16, 24, 0.86); padding: 24px; animation: fade .18s ease; }
+.zoom-stage { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.zoom-img { max-width: 100%; max-height: 70vh; object-fit: contain; background: #fffdf7; border-radius: 6px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.zoom-cap { color: rgba(255,255,255,.86); font-size: 13px; letter-spacing: 1px; text-align: center; font-family: "STKaiti", "KaiTi", serif; }
+.zoom-close { position: absolute; top: 14px; right: 18px; z-index: 2; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.18); color: white; font-size: 26px; line-height: 1; cursor: pointer; }
+.zoom-close:active { transform: scale(.96); }
+.sample-compare-img { cursor: zoom-in; }
+.sample-compare-img img { cursor: zoom-in; }
+.zoom-hint { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; letter-spacing: 0; }
+
+/* ============ 大德高僧题词（首页 3 列 + 弹窗纵向） ============ */
+.inscription-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.inscription-card { padding: 8px; cursor: pointer; }
+.inscription-img { width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid #ead9b3; background: #fffdf7; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.inscription-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.inscription-info { padding-top: 6px; }
+.inscription-info strong { display: block; font-size: 12px; color: var(--blue-900); font-family: "STKaiti", "KaiTi", serif; }
+.inscription-info small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.inscription-grid-large { display: grid; gap: 12px; }
+.inscription-grid-large .quote-card { padding: 12px; }
+.inscription-img-large { width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid #ead9b3; background: #fffdf7; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.inscription-img-large img { width: 100%; height: 100%; object-fit: contain; display: block; }
+@media (max-width: 360px) {
+  .inscription-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============ 募缘录（原功德簿 tab） ============ */
+.ledger-row.ledger-detail { display: block; padding: 14px; }
+.ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.lg-row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lg-row.lg-full { grid-column: 1 / -1; }
+.lg-row span { color: #786b58; font-size: 10px; }
+.lg-row b { color: #4a3f30; font-size: 13px; font-weight: 600; word-break: break-all; }
+.lg-row b.amount { color: var(--gold); font-family: Georgia, serif; }
+.ledger-grid .lg-row:nth-child(odd):not(.lg-full) { border-right: 1px dashed #ead9b3; padding-right: 8px; }
+
+/* ============ 功德簿左右分栏（左：基础信息 / 右：牌记） ============ */
+.book-ledger-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; }
+.book-ledger-split .book-ledger-info { margin-bottom: 0; }
+.book-ledger-info.book-ledger-info-single { grid-template-columns: 1fr; gap: 10px; padding: 14px; }
+.book-ledger-info.book-ledger-info-single .bli-row { gap: 4px; padding: 0 !important; border-right: 0 !important; }
+.book-ledger-info.book-ledger-info-single .bli-row span { font-size: 11px; letter-spacing: 1px; }
+.book-ledger-info.book-ledger-info-single .bli-row b { font-size: 14px; line-height: 1.5; }
+.book-ledger-paiji { position: relative; display: flex; flex-direction: column; padding: 8px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; }
+.book-ledger-paiji .paiji-img { cursor: zoom-in; }
+.book-ledger-paiji .zoom-hint { margin-top: 6px; text-align: center; }
+.blp-tag { font-family: "STKaiti", serif; font-size: 11px; color: #786b58; letter-spacing: 2px; margin-bottom: 6px; text-align: center; }
+.paiji-img { flex: 1; min-height: 0; width: 100%; height: 100%; object-fit: contain; background: #fffdf7; border-radius: 4px; display: block; }
+@media (max-width: 360px) {
+  .book-ledger-split { grid-template-columns: 1fr; }
+}
+
+/* ============ 图片放大查看 ============ */
+.zoom-overlay { position: absolute; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; background: rgba(8, 16, 24, 0.86); padding: 24px; animation: fade .18s ease; }
+.zoom-stage { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.zoom-img { max-width: 100%; max-height: 70vh; object-fit: contain; background: #fffdf7; border-radius: 6px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.zoom-cap { color: rgba(255,255,255,.86); font-size: 13px; letter-spacing: 1px; text-align: center; font-family: "STKaiti", "KaiTi", serif; }
+.zoom-close { position: absolute; top: 14px; right: 18px; z-index: 2; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.18); color: white; font-size: 26px; line-height: 1; cursor: pointer; }
+.zoom-close:active { transform: scale(.96); }
+.sample-compare-img { cursor: zoom-in; }
+.sample-compare-img img { cursor: zoom-in; }
+.zoom-hint { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; letter-spacing: 0; }
+
+/* ============ 大德高僧题词（首页 3 列 + 弹窗纵向） ============ */
+.inscription-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.inscription-card { padding: 8px; cursor: pointer; }
+.inscription-img { width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid #ead9b3; background: #fffdf7; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.inscription-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.inscription-info { padding-top: 6px; }
+.inscription-info strong { display: block; font-size: 12px; color: var(--blue-900); font-family: "STKaiti", "KaiTi", serif; }
+.inscription-info small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.inscription-grid-large { display: grid; gap: 12px; }
+.inscription-grid-large .quote-card { padding: 12px; }
+.inscription-img-large { width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid #ead9b3; background: #fffdf7; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.inscription-img-large img { width: 100%; height: 100%; object-fit: contain; display: block; }
+@media (max-width: 360px) {
+  .inscription-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============ 募缘录（原功德簿 tab） ============ */
+.ledger-row.ledger-detail { display: block; padding: 14px; }
+.ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.lg-row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lg-row.lg-full { grid-column: 1 / -1; }
+.lg-row span { color: #786b58; font-size: 10px; }
+.lg-row b { color: #4a3f30; font-size: 13px; font-weight: 600; word-break: break-all; }
+.lg-row b.amount { color: var(--gold); font-family: Georgia, serif; }
+.ledger-grid .lg-row:nth-child(odd):not(.lg-full) { border-right: 1px dashed #ead9b3; padding-right: 8px; }
 
 .catalog-tabs { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .catalog-tabs button { min-height: 42px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--muted); font-size: 13px; cursor: pointer; }
@@ -709,7 +889,7 @@ button { color: inherit; }
 
 .splash::before { content: none; }
 .splash::after { content: none; }
-.splash-lotus { position: absolute; left: 50%; top: 138px; transform: translateX(-50%); width: 124px; height: 104px; mix-blend-mode: screen; filter: drop-shadow(0 4px 14px rgba(0,0,0,.35)); animation: lotusFloat 4s ease-in-out infinite; }
+.splash-lotus { position: absolute; left: 50%; top: 130px; transform: translateX(-50%); width: 80px; height: 128px; object-fit: contain; filter: drop-shadow(0 6px 16px rgba(0,0,0,.42)); animation: lotusFloat 4s ease-in-out infinite; }
 @keyframes lotusFloat { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -8px); } }
 .splash-top { position: relative; z-index: 2; padding: 26px 24px 0; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: rgba(247,232,194,.7); }
 .splash-top .splash-stamp { padding: 4px 9px; border: 1px solid rgba(247,232,194,.45); font-size: 10px; }
@@ -719,7 +899,8 @@ button { color: inherit; }
 .splash-mid .splash-divider { display: none; }
 .splash-mid .splash-sub { margin: 0; font-family: "STKaiti", serif; font-size: 15px; line-height: 1.8; color: rgba(247,232,194,.85); letter-spacing: 2px; }
 .splash-quote { position: relative; z-index: 2; margin: 22px 24px 0; padding: 14px 16px; text-align: center; font-family: "STKaiti", serif; font-size: 14px; line-height: 1.7; color: rgba(247,232,194,.7); }
-.splash-stats { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(3, 1fr); margin: 22px 24px 0; padding: 16px 8px; }
+.splash-stats { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(2, 1fr); margin: 22px 24px 0; padding: 16px 8px; gap: 8px; justify-items: center; align-items: center; }
+.splash-stats > div { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
 .splash-stats b { display: block; font-family: Georgia, serif; font-size: 19px; color: #f7e8c2; }
 .splash-stats span { display: block; margin-top: 4px; font-size: 10px; color: rgba(247,232,194,.55); }
 .splash-foot { position: relative; z-index: 2; padding: 0 24px 36px; text-align: center; }
@@ -849,10 +1030,13 @@ button { color: inherit; }
 .fund-book { padding: 16px; }
 .fund-book-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
 .fund-book-head strong { font-size: 14px; color: #4a3f30; }
-.fund-book-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 8px; border: 1px solid #ead9b3; background: #fbf5e8; border-radius: 6px; }
-.fund-book-info > div { text-align: center; }
+.fund-book-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 8px; border: 1px solid #ead9b3; background: #fbf5e8; border-radius: 6px; }
+.fund-book-info > div { text-align: left; padding: 4px 6px; }
 .fund-book-info span { display: block; color: #786b58; font-size: 10px; }
-.fund-book-info b { display: block; margin-top: 3px; font-family: Georgia, serif; font-size: 14px; color: #7a5520; }
+.fund-book-info b { display: block; margin-top: 2px; font-family: Georgia, serif; font-size: 14px; color: #7a5520; word-break: break-all; }
+.fund-book-trade { margin-top: 10px; padding: 8px 10px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.fund-book-trade span { color: #786b58; font-size: 11px; }
+.fund-book-trade b { font-family: Consolas, "Courier New", monospace; color: #4a3f30; font-size: 12px; word-break: break-all; text-align: right; }
 
 /* ============ 功德簿信息展示（首页样书 + 预览弹窗） ============ */
 .book-ledger-info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-bottom: 12px; padding: 12px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; }
@@ -860,3 +1044,56 @@ button { color: inherit; }
 .bli-row span { color: #786b58; font-size: 10px; }
 .bli-row b { color: #4a3f30; font-size: 13px; font-weight: 600; word-break: break-all; }
 .book-ledger-info .bli-row:nth-child(odd) { border-right: 1px dashed #ead9b3; padding-right: 8px; }
+
+/* ============ 功德簿左右分栏（左：基础信息 / 右：牌记） ============ */
+.book-ledger-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; }
+.book-ledger-split .book-ledger-info { margin-bottom: 0; }
+.book-ledger-info.book-ledger-info-single { grid-template-columns: 1fr; gap: 10px; padding: 14px; }
+.book-ledger-info.book-ledger-info-single .bli-row { gap: 4px; padding: 0 !important; border-right: 0 !important; }
+.book-ledger-info.book-ledger-info-single .bli-row span { font-size: 11px; letter-spacing: 1px; }
+.book-ledger-info.book-ledger-info-single .bli-row b { font-size: 14px; line-height: 1.5; }
+.book-ledger-paiji { position: relative; display: flex; flex-direction: column; padding: 8px; border: 1px dashed #ead9b3; background: #fbf5e8; border-radius: 6px; }
+.book-ledger-paiji .paiji-img { cursor: zoom-in; }
+.book-ledger-paiji .zoom-hint { margin-top: 6px; text-align: center; }
+.blp-tag { font-family: "STKaiti", serif; font-size: 11px; color: #786b58; letter-spacing: 2px; margin-bottom: 6px; text-align: center; }
+.paiji-img { flex: 1; min-height: 0; width: 100%; height: 100%; object-fit: contain; background: #fffdf7; border-radius: 4px; display: block; }
+@media (max-width: 360px) {
+  .book-ledger-split { grid-template-columns: 1fr; }
+}
+
+/* ============ 图片放大查看 ============ */
+.zoom-overlay { position: absolute; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; background: rgba(8, 16, 24, 0.86); padding: 24px; animation: fade .18s ease; }
+.zoom-stage { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.zoom-img { max-width: 100%; max-height: 70vh; object-fit: contain; background: #fffdf7; border-radius: 6px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+.zoom-cap { color: rgba(255,255,255,.86); font-size: 13px; letter-spacing: 1px; text-align: center; font-family: "STKaiti", "KaiTi", serif; }
+.zoom-close { position: absolute; top: 14px; right: 18px; z-index: 2; width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255,255,255,.18); color: white; font-size: 26px; line-height: 1; cursor: pointer; }
+.zoom-close:active { transform: scale(.96); }
+.sample-compare-img { cursor: zoom-in; }
+.sample-compare-img img { cursor: zoom-in; }
+.zoom-hint { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; letter-spacing: 0; }
+
+/* ============ 大德高僧题词（首页 3 列 + 弹窗纵向） ============ */
+.inscription-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.inscription-card { padding: 8px; cursor: pointer; }
+.inscription-img { width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid #ead9b3; background: #fffdf7; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.inscription-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.inscription-info { padding-top: 6px; }
+.inscription-info strong { display: block; font-size: 12px; color: var(--blue-900); font-family: "STKaiti", "KaiTi", serif; }
+.inscription-info small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.inscription-grid-large { display: grid; gap: 12px; }
+.inscription-grid-large .quote-card { padding: 12px; }
+.inscription-img-large { width: 100%; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid #ead9b3; background: #fffdf7; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+.inscription-img-large img { width: 100%; height: 100%; object-fit: contain; display: block; }
+@media (max-width: 360px) {
+  .inscription-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============ 募缘录（原功德簿 tab） ============ */
+.ledger-row.ledger-detail { display: block; padding: 14px; }
+.ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.lg-row { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lg-row.lg-full { grid-column: 1 / -1; }
+.lg-row span { color: #786b58; font-size: 10px; }
+.lg-row b { color: #4a3f30; font-size: 13px; font-weight: 600; word-break: break-all; }
+.lg-row b.amount { color: var(--gold); font-family: Georgia, serif; }
+.ledger-grid .lg-row:nth-child(odd):not(.lg-full) { border-right: 1px dashed #ead9b3; padding-right: 8px; }

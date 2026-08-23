@@ -21,9 +21,56 @@ const STAGES = [
 
 const PER_PAGE_PRICE = 200;
 
+// 常住地区选项（认捐流程第 1 步使用）
+const REGION_COUNTRIES = ['中国大陆', '中国香港', '中国澳门', '中国台湾', '新加坡', '马来西亚', '美国', '加拿大', '澳大利亚', '日本', '韩国', '英国', '法国', '德国', '其他'];
+const REGION_PROVINCES = ['北京市', '上海市', '天津市', '重庆市', '广东省', '浙江省', '江苏省', '四川省', '福建省', '湖北省', '湖南省', '山东省', '河南省', '河北省', '山西省', '陕西省', '辽宁省', '吉林省', '黑龙江省', '安徽省', '江西省', '云南省', '贵州省', '广西壮族自治区', '内蒙古自治区', '新疆维吾尔自治区', '西藏自治区', '宁夏回族自治区', '海南省', '甘肃省', '青海省', '其他'];
+const REGION_CITIES = ['北京', '上海', '广州', '深圳', '杭州', '南京', '成都', '武汉', '西安', '重庆', '天津', '苏州', '青岛', '长沙', '郑州', '济南', '福州', '厦门', '宁波', '温州', '佛山', '东莞', '珠海', '中山', '惠州', '泉州', '合肥', '南昌', '昆明', '贵阳', '南宁', '哈尔滨', '长春', '沈阳', '大连', '兰州', '海口', '拉萨', '乌鲁木齐', '呼和浩特', '银川', '西宁', '太原', '石家庄', '其他'];
+
+// 经书子类型（部类 → 子类）元数据：
+// section 取值与 books[].section 保持一致（经藏 / 律藏 / 论藏 / 述藏）；
+// count/volume 为该子类在整部《嘉兴藏》中的合计，仅用于头部展示。
+const SUBCATEGORIES = {
+  '经藏': [
+    { key: 'huayan',   name: '华严部',   tag: '显教', count: 74,  volume: 359,  desc: '以《华严经》及宗密、李通玄等华严章疏为主，开显法界缘起、理事无碍、事事无碍之奥旨。' },
+    { key: 'ahan',     name: '阿含部',   tag: '显教', count: 325, volume: 828,  desc: '原始佛教与部派佛教之根本经典，含《长阿含》《中阿含》《杂阿含》《增一阿含》。' },
+    { key: 'fangdeng', name: '方等部',   tag: '显教', count: 291, volume: 844,  desc: '方等大乘经典，含《宝积》《大集》《维摩》《思益》《月灯》《楞严》等。' },
+    { key: 'bore',     name: '般若部',   tag: '显教', count: 47,  volume: 842,  desc: '般若类经典总汇，含《大般若》《金刚》《心经》《仁王》《妙吉祥》等。' },
+    { key: 'fahua',    name: '法华部',   tag: '显教', count: 47,  volume: 212,  desc: '以《法华经》及天台宗法华三大部（《玄义》《文句》《止观》）为骨干。' },
+    { key: 'jingzhou', name: '经咒部',   tag: '密教', count: 260, volume: 481,  desc: '密教陀罗尼与诸经咒本，含《持世陀罗尼》《随求即得大自在陀罗尼》等。' },
+    { key: 'yigui',    name: '仪轨部',   tag: '密教', count: 110, volume: 161,  desc: '密教修行仪轨与忏法，含《楞严》《大悲》《焰口》《水陆》各类仪轨科判。' }
+  ],
+  '律藏': [
+    { key: 'jiejing', name: '戒经', tag: '律藏', count: 52, volume: 79,  desc: '四众戒本与菩萨戒经，含《梵网》《优婆塞》《十善业道》《在家律要》等。' },
+    { key: 'lvyi',    name: '律仪', tag: '律藏', count: 58, volume: 480, desc: '僧团轨范与羯磨作法，含《四分律》《五分律》《十诵律》《僧祇律》等广律。' }
+  ],
+  '论藏': [
+    { key: 'shijing', name: '释经',  tag: '论藏', count: 36, volume: 209, desc: '释经论典：对经文逐句注解的著作，如《大智度论》《法华玄义释签》《华严经探玄记》。' },
+    { key: 'pitan',   name: '毗昙',  tag: '论藏', count: 43, volume: 733, desc: '阿毗达磨论书：以《俱舍》《婆沙》《杂心》为主，抉发诸法自相共相。' },
+    { key: 'zhongguan', name: '中观', tag: '论藏', count: 30, volume: 74,  desc: '中观学派根本论：《中论》《百论》《十二门论》《三论玄义》《肇论》等。' },
+    { key: 'yuqie',   name: '瑜伽部', tag: '论藏', count: 56, volume: 308, desc: '瑜伽行派论典：《瑜伽师地论》《成唯识论》《唯识三十颂》《摄大乘论》等。' },
+    { key: 'lunji',   name: '论集',  tag: '论藏', count: 60, volume: 207, desc: '综合性的论集与法义汇编：《大乘义章》《翻译名义集》《大乘起信论》等。' }
+  ],
+  '述藏': [
+    { key: 'huayanzong',   name: '华严宗', tag: '中国八宗', count: 171, volume: 1250, desc: '华严宗祖师撰述：杜顺、智俨、法藏、宗密、清凉国师一系著作。' },
+    { key: 'lvzong',       name: '律宗',   tag: '中国八宗', count: 195, volume: 539,  desc: '律宗南山一脉撰述：道宣、弘一、灵芝元照诸律师之著述。' },
+    { key: 'jingtuzong',   name: '净土宗', tag: '中国八宗', count: 154, volume: 333,  desc: '净土宗祖师撰述：善导、承远、法照、少康、莲池、蕅益、印光等。' },
+    { key: 'sanlunzong',   name: '三论宗', tag: '中国八宗', count: 62,  volume: 213,  desc: '三论宗撰述：吉藏、僧肇、僧朗、僧诠、法朗等三论宗脉著作。' },
+    { key: 'faxiangzong',  name: '法相宗', tag: '中国八宗', count: 121, volume: 682,  desc: '法相唯识宗（慈恩宗）撰述：窥基、慧沼、智周等唯识学论著。' },
+    { key: 'mizong',       name: '密宗',   tag: '中国八宗', count: 124, volume: 573,  desc: '密宗（真言宗 / 唐密）撰述：不空、惠果、一行等译述与仪轨集成。' },
+    { key: 'chanzong',     name: '禅宗',   tag: '中国八宗', count: 739, volume: 4362, desc: '禅宗祖师语录与撰述：《六祖坛经》《五灯会元》《宗镜录》《憨山梦游集》等。' },
+    { key: 'tiantaizong',  name: '天台宗', tag: '中国八宗', count: 168, volume: 961,  desc: '天台宗撰述：智顗、灌顶、知礼、幽溪、藕益等台宗诸部。' },
+    { key: 'shizhuan',     name: '史传',   tag: '史传',     count: 39,  volume: 467,  desc: '高僧传与佛教史传：《佛祖统纪》《南海寄归内法传》《弘明集》《广弘明集》等。' },
+    { key: 'huibian',      name: '汇编',   tag: '汇编',     count: 44,  volume: 724,  desc: '综合性汇编：《法苑珠林》《诸经要集》《翻译名义集》《释氏要览》等。' },
+    { key: 'lunheng',      name: '论衡',   tag: '论衡',     count: 19,  volume: 121,  desc: '教内论衡与护教撰述：《原人论》《辟邪集》《折疑论》《三教论衡》等。' },
+    { key: 'dizhi',        name: '地志',   tag: '地志',     count: 68,  volume: 498,  desc: '佛教地志与山志寺志：《清凉山志》《峨眉山志》《九华山志》《普陀山志》等。' },
+    { key: 'mulu1',        name: '目录',   tag: '目录',     count: 53,  volume: 265,  desc: '经典目录与藏经目录：《大唐内典录》《开元释教录》《至元法宝勘同总录》等。' },
+    { key: 'mulu2',        name: '目录',   tag: '目录',     count: 17,  volume: 222,  desc: '近代经录与专科目录：《嘉兴藏目录》《频伽藏目录》《卍续藏经目录》等。' }
+  ]
+};
+
 const books = [
   {
-    id: 'JX-0012', title: '大方廣佛華嚴經', section: '经藏', volume: '四十卷', status: '已圆满', progress: 100,
+    id: 'JX-0012', title: '大方廣佛華嚴經', section: '经藏', sub: 'huayan', volume: '四十卷', status: '已圆满', progress: 100,
     pages: 718, amount: 143600,
     summary: '以毗卢遮那佛为中心，开显法界缘起与菩萨行愿。',
     stage: 'done',
@@ -35,7 +82,7 @@ const books = [
     sample: '如是我闻。一时，佛在摩竭提国寂灭道场，始成正觉。其地坚固，金刚所成，上妙宝轮，及众宝华，清净摩尼，以为严饰。'
   },
   {
-    id: 'JX-0047', title: '妙法莲华经', section: '经藏', volume: '七卷', status: '已圆满', progress: 100,
+    id: 'JX-0047', title: '妙法莲华经', section: '经藏', sub: 'fahua', volume: '七卷', status: '已圆满', progress: 100,
     pages: 210, amount: 210 * PER_PAGE_PRICE,
     summary: '阐明一乘真实、开权显实，是汉传佛教重要经典。',
     stage: 'done',
@@ -48,7 +95,7 @@ const books = [
     sample: '尔时，佛放眉间白毫相光，照东方万八千世界，靡不周遍，下至阿鼻地狱，上至阿迦尼吒天。'
   },
   {
-    id: 'JX-0001', title: '佛说菩萨十住经', section: '经藏', volume: '一卷', status: '可认捐', progress: 0,
+    id: 'JX-0001', title: '佛说菩萨十住经', section: '经藏', sub: 'fangdeng', volume: '一卷', status: '可认捐', progress: 0,
     pages: 5, amount: 5 * PER_PAGE_PRICE,
     summary: '佛说菩萨十住之法，明发心、住生、修行、具足等十阶位。',
     stage: 'todo',
@@ -60,7 +107,7 @@ const books = [
     sample: '闻如是。一时，佛在罗阅祇耆阇崛山中，与大比丘众千二百五十人俱。尔时，佛告诸比丘言：汝等当知，菩萨有十住。'
   },
   {
-    id: 'JX-0231', title: '金刚般若波罗蜜经', section: '般若部', volume: '一卷', status: '已圆满', progress: 100,
+    id: 'JX-0231', title: '金刚般若波罗蜜经', section: '经藏', sub: 'bore', volume: '一卷', status: '已圆满', progress: 100,
     pages: 28, amount: 28 * PER_PAGE_PRICE,
     summary: '以般若智慧破除执著，示无住生心之要义。',
     stage: 'done',
@@ -73,7 +120,7 @@ const books = [
     sample: '如是我闻。一时，佛在舍卫国祇树给孤独园，与大比丘众千二百五十人俱。尔时，世尊食时，著衣持钵，入舍卫大城乞食。'
   },
   {
-    id: 'JX-0528', title: '楞严经正脉疏', section: '续藏', volume: '十卷', status: '可认捐', progress: 25,
+    id: 'JX-0528', title: '楞严经正脉疏', section: '经藏', sub: 'yigui', volume: '十卷', status: '可认捐', progress: 25,
     pages: 360, amount: 360 * PER_PAGE_PRICE,
     summary: '明代交光真鉴法师著，对楞严经义理作系统疏释。',
     stage: 'doing',
@@ -85,7 +132,7 @@ const books = [
     sample: '大佛顶首楞严经者，乃如来藏心之显诠，妙真如性之正轨也。盖此一经，因阿难之请起于世尊之座，演三藏之精微，破七处之妄心。'
   },
   {
-    id: 'JX-1106', title: '五灯会元', section: '史传部', volume: '二十卷', status: '待领取', progress: 12,
+    id: 'JX-1106', title: '五灯会元', section: '述藏', sub: 'chanzong', volume: '二十卷', status: '待领取', progress: 12,
     pages: 480, amount: 480 * PER_PAGE_PRICE,
     summary: '辑录禅宗五家七宗历代祖师机缘语要。',
     stage: 'todo',
@@ -97,7 +144,7 @@ const books = [
     sample: '世尊在灵山会上，拈花示众，是时众皆默然，唯迦叶尊者破颜微笑。世尊曰：吾有正法眼藏，涅槃妙心，实相无相，微妙法门，不立文字，教外别传，付嘱摩诃迦叶。'
   },
   {
-    id: 'JX-2278', title: '憨山老人梦游集', section: '中国撰述', volume: '五十五卷', status: '可认捐', progress: 18,
+    id: 'JX-2278', title: '憨山老人梦游集', section: '述藏', sub: 'chanzong', volume: '五十五卷', status: '可认捐', progress: 18,
     pages: 1100, amount: 1100 * PER_PAGE_PRICE,
     summary: '汇集憨山德清大师诗文、开示、书信与佛学论述。',
     stage: 'doing',
@@ -111,7 +158,7 @@ const books = [
   },
   // —— 以下为目录扩展：增加更多「可认捐」经书，承接《新修嘉興大藏經》编修体例 ——
   {
-    id: 'JX-0103', title: '大宝积经', section: '宝积部', volume: '四十九卷', status: '可认捐', progress: 6,
+    id: 'JX-0103', title: '大宝积经', section: '经藏', sub: 'fangdeng', volume: '四十九卷', status: '可认捐', progress: 6,
     pages: 980, amount: 980 * PER_PAGE_PRICE,
     summary: '大乘宝积经典汇编，广宣如来藏与菩萨万行。',
     stage: 'doing',
@@ -123,7 +170,7 @@ const books = [
     sample: '如是我闻。一时，佛在王舍城耆阇崛山中，与大比丘众五千人俱，皆得阿罗汉果。'
   },
   {
-    id: 'JX-0186', title: '维摩诘所说经', section: '经藏', volume: '三卷', status: '可认捐', progress: 0,
+    id: 'JX-0186', title: '维摩诘所说经', section: '经藏', sub: 'fangdeng', volume: '三卷', status: '可认捐', progress: 0,
     pages: 60, amount: 60 * PER_PAGE_PRICE,
     summary: '以维摩居士示疾因缘，广演不二法门与净佛国土之旨。',
     stage: 'todo',
@@ -134,7 +181,7 @@ const books = [
     sample: '如是我闻。一时，佛在毗耶离庵罗树园，与大比丘众八千人俱，菩萨三万二千。'
   },
   {
-    id: 'JX-0309', title: '大智度论', section: '释经论部', volume: '一百卷', status: '可认捐', progress: 3,
+    id: 'JX-0309', title: '大智度论', section: '论藏', sub: 'shijing', volume: '一百卷', status: '可认捐', progress: 3,
     pages: 2000, amount: 2000 * PER_PAGE_PRICE,
     summary: '龙树菩萨释《大般若经》之要论，抉择空义，旁通三藏。',
     stage: 'doing',
@@ -146,7 +193,7 @@ const books = [
     sample: '智度大道佛一切智本，度一切诸佛之智本。本愿誓坚固，事究竟不可坏。'
   },
   {
-    id: 'JX-0417', title: '六祖坛经', section: '中国撰述', volume: '一卷', status: '可认捐', progress: 0,
+    id: 'JX-0417', title: '六祖坛经', section: '述藏', sub: 'chanzong', volume: '一卷', status: '可认捐', progress: 0,
     pages: 22, amount: 22 * PER_PAGE_PRICE,
     summary: '惠能大师于韶州大梵寺开示，弟子法海集录，南宗禅根本经典。',
     stage: 'todo',
@@ -158,7 +205,7 @@ const books = [
     sample: '善知识！菩提自性，本来清净；但用此心，直了成佛。'
   },
   {
-    id: 'JX-0562', title: '法华玄义释签', section: '释经论部', volume: '二十卷', status: '可认捐', progress: 0,
+    id: 'JX-0562', title: '法华玄义释签', section: '论藏', sub: 'shijing', volume: '二十卷', status: '可认捐', progress: 0,
     pages: 400, amount: 400 * PER_PAGE_PRICE,
     summary: '湛然大师释《法华玄义》之释签，发挥天台圆教观门。',
     stage: 'todo',
@@ -170,7 +217,7 @@ const books = [
     sample: '夫法华妙义，统摄一代圣教，开示悟入佛之知见。'
   },
   {
-    id: 'JX-0648', title: '华严经探玄记', section: '释经论部', volume: '二十卷', status: '可认捐', progress: 12,
+    id: 'JX-0648', title: '华严经探玄记', section: '论藏', sub: 'shijing', volume: '二十卷', status: '可认捐', progress: 12,
     pages: 420, amount: 420 * PER_PAGE_PRICE,
     summary: '法藏大师释《大方广佛华严经》之纲要，明十玄六相之奥义。',
     stage: 'doing',
@@ -182,7 +229,7 @@ const books = [
     sample: '大方广佛华严经者，乃毗卢遮那如来，于菩提场初成正觉，称性所演之法界大经。'
   },
   {
-    id: 'JX-0735', title: '俱舍论颂', section: '释经论部', volume: '三十卷', status: '可认捐', progress: 0,
+    id: 'JX-0735', title: '俱舍论颂', section: '论藏', sub: 'pitan', volume: '三十卷', status: '可认捐', progress: 0,
     pages: 600, amount: 600 * PER_PAGE_PRICE,
     summary: '世亲菩萨造，概括法相有部之根本教义，明诸法自性与缘起。',
     stage: 'todo',
@@ -194,7 +241,7 @@ const books = [
     sample: '诸一切种诸法体性，略有三种：一者、染污，二者、洁白，三者、无记。'
   },
   {
-    id: 'JX-0892', title: '百丈清规', section: '中国撰述', volume: '十卷', status: '可认捐', progress: 0,
+    id: 'JX-0892', title: '百丈清规', section: '述藏', sub: 'chanzong', volume: '十卷', status: '可认捐', progress: 0,
     pages: 200, amount: 200 * PER_PAGE_PRICE,
     summary: '百丈怀海禅师立丛林清规，为后世寺院生活与修行之规范。',
     stage: 'todo',
@@ -206,7 +253,7 @@ const books = [
     sample: '丛林以无事为兴盛，修行以放下为安乐。'
   },
   {
-    id: 'JX-1024', title: '梵网经菩萨戒', section: '律藏', volume: '二卷', status: '可认捐', progress: 0,
+    id: 'JX-1024', title: '梵网经菩萨戒', section: '律藏', sub: 'jiejing', volume: '二卷', status: '可认捐', progress: 0,
     pages: 36, amount: 36 * PER_PAGE_PRICE,
     summary: '卢舍那佛为初地菩萨说十重四十八轻戒，为汉传大乘戒律根本。',
     stage: 'todo',
@@ -216,7 +263,7 @@ const books = [
     sample: '若佛子。受菩萨戒者。应当发愿。愿一切众生皆得成佛。'
   },
   {
-    id: 'JX-1352', title: '释净土群疑论', section: '中国撰述', volume: '六卷', status: '可认捐', progress: 0,
+    id: 'JX-1352', title: '释净土群疑论', section: '述藏', sub: 'jingtuzong', volume: '六卷', status: '可认捐', progress: 0,
     pages: 120, amount: 120 * PER_PAGE_PRICE,
     summary: '窥基法师撰，释净土法门之群疑，明西方极乐与他方佛国之旨。',
     stage: 'todo',
@@ -227,7 +274,7 @@ const books = [
     sample: '西方极乐世界，去此十万亿佛刹，唯信愿念佛，乃得往生。'
   },
   {
-    id: 'JX-1489', title: '肇论', section: '中国撰述', volume: '三卷', status: '可认捐', progress: 0,
+    id: 'JX-1489', title: '肇论', section: '述藏', sub: 'sanlunzong', volume: '三卷', status: '可认捐', progress: 0,
     pages: 60, amount: 60 * PER_PAGE_PRICE,
     summary: '僧肇大师以般若中道之理，抉择有无、体用、名实之关捩。',
     stage: 'todo',
@@ -238,7 +285,7 @@ const books = [
     sample: '夫缘起之法，无我我所；本无所住，谓之真如。'
   },
   {
-    id: 'JX-1602', title: '瑜伽师地论', section: '瑜伽部', volume: '一百卷', status: '可认捐', progress: 0,
+    id: 'JX-1602', title: '瑜伽师地论', section: '论藏', sub: 'yuqie', volume: '一百卷', status: '可认捐', progress: 0,
     pages: 1900, amount: 1900 * PER_PAGE_PRICE,
     summary: '弥勒菩萨说，无著菩萨记，统摄大乘瑜伽行派修行阶位。',
     stage: 'todo',
@@ -250,7 +297,7 @@ const books = [
     sample: '云何瑜伽？谓奢摩他、毗钵舍那，二者平等双运，是名瑜伽。'
   },
   {
-    id: 'JX-1745', title: '宗镜录', section: '中国撰述', volume: '一百卷', status: '可认捐', progress: 0,
+    id: 'JX-1745', title: '宗镜录', section: '述藏', sub: 'chanzong', volume: '一百卷', status: '可认捐', progress: 0,
     pages: 2100, amount: 2100 * PER_PAGE_PRICE,
     summary: '永明延寿禅师集三宗之旨，归宗于一心，照万法如镜。',
     stage: 'todo',
@@ -261,7 +308,7 @@ const books = [
     sample: '一心为宗，照万法如镜；镜智为体，显十界如珠。'
   },
   {
-    id: 'JX-1923', title: '南海寄归内法传', section: '史传部', volume: '四卷', status: '可认捐', progress: 0,
+    id: 'JX-1923', title: '南海寄归内法传', section: '述藏', sub: 'shizhuan', volume: '四卷', status: '可认捐', progress: 0,
     pages: 80, amount: 80 * PER_PAGE_PRICE,
     summary: '义净三藏记述印度南海诸国所行之佛教内法与受戒轨则。',
     stage: 'todo',
@@ -272,7 +319,7 @@ const books = [
     sample: '凡出家者，当先求戒师，虔心请法，如法受得清净戒体。'
   },
   {
-    id: 'JX-2087', title: '原人论', section: '中国撰述', volume: '一卷', status: '可认捐', progress: 0,
+    id: 'JX-2087', title: '原人论', section: '述藏', sub: 'lunheng', volume: '一卷', status: '可认捐', progress: 0,
     pages: 14, amount: 14 * PER_PAGE_PRICE,
     summary: '宗密大师撰，会通儒道二教，明佛法人天之正理。',
     stage: 'todo',
@@ -283,7 +330,7 @@ const books = [
     sample: '万物皆因缘和合而生，本无自性，当体即空。'
   },
   {
-    id: 'JX-2216', title: '三论玄义', section: '释经论部', volume: '二卷', status: '可认捐', progress: 0,
+    id: 'JX-2216', title: '三论玄义', section: '论藏', sub: 'zhongguan', volume: '二卷', status: '可认捐', progress: 0,
     pages: 40, amount: 40 * PER_PAGE_PRICE,
     summary: '吉藏大师释三论（般若、中论、百论）之大义，破邪显正。',
     stage: 'todo',
@@ -293,7 +340,7 @@ const books = [
     sample: '一切法无自性，故名之为空；空亦复空，名为毕竟空。'
   },
   {
-    id: 'JX-2394', title: '大乘起信论', section: '释经论部', volume: '一卷', status: '可认捐', progress: 0,
+    id: 'JX-2394', title: '大乘起信论', section: '论藏', sub: 'lunji', volume: '一卷', status: '可认捐', progress: 0,
     pages: 24, amount: 24 * PER_PAGE_PRICE,
     summary: '马鸣菩萨造，明大乘起信之理，开示真如门与生灭门之义。',
     stage: 'todo',
@@ -305,7 +352,7 @@ const books = [
     sample: '一切众生，从无始来，皆因妄念熏习，而有种种颠倒执著。'
   },
   {
-    id: 'JX-2518', title: '成唯识论', section: '唯识部', volume: '十卷', status: '可认捐', progress: 0,
+    id: 'JX-2518', title: '成唯识论', section: '论藏', sub: 'yuqie', volume: '十卷', status: '可认捐', progress: 0,
     pages: 200, amount: 200 * PER_PAGE_PRICE,
     summary: '护法等十师释，世亲菩萨造《唯识三十颂》之论，明万法唯识之理。',
     stage: 'todo',
@@ -317,7 +364,7 @@ const books = [
     sample: '由假说我法，有种种相转，彼依识所现。'
   },
   {
-    id: 'JX-2671', title: '大乘义章', section: '释经论部', volume: '二十六卷', status: '可认捐', progress: 0,
+    id: 'JX-2671', title: '大乘义章', section: '论藏', sub: 'lunji', volume: '二十六卷', status: '可认捐', progress: 0,
     pages: 520, amount: 520 * PER_PAGE_PRICE,
     summary: '慧远法师撰，统摄大乘教义诸门，分章释义，为百科全书式论书。',
     stage: 'todo',
@@ -328,7 +375,7 @@ const books = [
     sample: '大乘之义，广摄万有，统归一真。'
   },
   {
-    id: 'JX-2843', title: '翻译名义集', section: '事汇部', volume: '七卷', status: '可认捐', progress: 0,
+    id: 'JX-2843', title: '翻译名义集', section: '论藏', sub: 'lunji', volume: '七卷', status: '可认捐', progress: 0,
     pages: 140, amount: 140 * PER_PAGE_PRICE,
     summary: '法云法师编，注解佛典译名、音译、义译之异同，为读经工具之书。',
     stage: 'todo',
@@ -339,7 +386,7 @@ const books = [
     sample: '梵语佛陀，此云觉者，具足自觉、觉他、觉行圆满三义。'
   },
   {
-    id: 'JX-2976', title: '佛祖统纪', section: '史传部', volume: '五十四卷', status: '可认捐', progress: 0,
+    id: 'JX-2976', title: '佛祖统纪', section: '述藏', sub: 'shizhuan', volume: '五十四卷', status: '可认捐', progress: 0,
     pages: 1080, amount: 1080 * PER_PAGE_PRICE,
     summary: '志磐法师撰，天台宗之通史兼传记，纪佛祖授受之源流。',
     stage: 'todo',
@@ -375,20 +422,21 @@ const donors = {
   ]
 };
 
-// 公开功德簿：一部经书对应一位功德主；同经不重复展示
+// 公开募缘录：一部经书对应一位功德主；同经不重复展示
 const donations = [
-  { name: '居士', book: '大方廣佛華嚴經', amount: 143600, date: '2026-07-15' },
-  { name: '净莲', book: '妙法莲华经', amount: 42000, date: '2026-08-10' },
-  { name: '王居士', book: '佛说菩萨十住经', amount: 1000, date: '2026-08-12' },
-  { name: '明心', book: '金刚般若波罗蜜经', amount: 5600, date: '2026-08-10' },
-  { name: '善护', book: '楞严经正脉疏', amount: 72000, date: '2026-08-10' },
-  { name: '陈居士', book: '憨山老人梦游集', amount: 220000, date: '2026-08-09' }
+  { name: '居士', book: '大方廣佛華嚴經', bookId: 'JX-0012', amount: 143600, date: '2026-07-15' },
+  { name: '净莲', book: '妙法莲华经', bookId: 'JX-0047', amount: 42000, date: '2026-08-10' },
+  { name: '王居士', book: '佛说菩萨十住经', bookId: 'JX-0001', amount: 1000, date: '2026-08-12' },
+  { name: '明心', book: '金刚般若波罗蜜经', bookId: 'JX-0231', amount: 5600, date: '2026-08-10' },
+  { name: '善护', book: '楞严经正脉疏', bookId: 'JX-0528', amount: 72000, date: '2026-08-10' },
+  { name: '陈居士', book: '憨山老人梦游集', bookId: 'JX-2278', amount: 220000, date: '2026-08-09' }
 ];
 
 const state = {
   page: 'home',
   splash: true,
   preview: null,
+  zoom: null,  // { src, caption }
   sampleTab: 'cover',     // cover / page / ledger
   catalogTab: '目录',
   catalogView: '全部',
@@ -409,6 +457,12 @@ const state = {
   // 认捐展示偏好：是否使用真实姓名、是否同意展示在功德簿
   pledgeUseRealName: true,
   pledgeShowInLedger: true,
+  // 当前认捐的常住地区（国别 / 省份 / 城市）
+  region: { country: '', province: '', city: '' },
+  // 经书目录批量认捐清单（元素为 bookId）。打开经目时清空；选中项在子类型与经书卡片上同步高亮
+  cart: [],
+  // 子类型折叠/展开状态（key 为子类型标识；不存在的 key 视为默认展开）
+  subOpen: {},
   // 当前演示用户已默认登录为「居士」，便于展示已捐赠的经书
   demoUser: { name: '居士', phone: '13800138000', code: 'GDZ-20260812-0287' }
 };
@@ -443,12 +497,7 @@ function setPage(page) {
 function render() {
   if (state.splash) { app.innerHTML = renderSplash(); bindSplash(); return; }
   if (state.preview) { app.innerHTML = ''; renderPreview(); return; }
-  // 默认演示状态：以「居士」身份登录，并预置对《大方廣佛華嚴經》的认捐记录
-  if (!state.loggedIn) {
-    state.loggedIn = true;
-    state.user = { ...state.demoUser };
-  }
-  ensureDemoMyDonation();
+  // 进入小程序默认未登录；登录由用户主动触发（首页/经目/公开均可浏览，但不展示个人数据）
   const pages = { home: renderHome, catalog: renderCatalog, transparent: renderTransparent, profile: renderProfile };
   app.innerHTML = (pages[state.page] || renderHome)();
   bindPageEvents();
@@ -470,7 +519,9 @@ function ensureDemoMyDonation() {
     pages: book.pages,
     date: '2026-07-15',
     anonymous: false,
-    progress: book.progress
+    progress: book.progress,
+    payMethod: '微信支付',
+    tradeNo: 'TX2026071500001'
   });
   state.certificates.push({
     id: certId,
@@ -498,7 +549,7 @@ function renderSplash() {
       <span>新修嘉兴大藏经 · 大众护持平台</span>
       <span class="splash-stamp">辛卯 · 2026</span>
     </div>
-    <img class="splash-lotus" src="assets/blue-lotus.png" alt="莲花">
+    <img class="splash-lotus" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面">
     <div class="splash-mid">
       <h1>新修嘉兴大藏经</h1>
       <div class="splash-en">XIN XIU JIA XING DA ZANG JING</div>
@@ -508,8 +559,7 @@ function renderSplash() {
     <div class="splash-quote">"以故宫珍藏本《嘉兴藏》为底本<br>正本清源，弘法利生"</div>
     <div class="splash-stats">
       <div><b>3,433</b><span>计划收录部数</span></div>
-      <div><b>55万</b><span>目录字数（已完稿）</span></div>
-      <div><b>10</b><span>年编纂周期</span></div>
+      <div><b>已完稿</b><span>阅藏指南</span></div>
     </div>
     <div class="splash-foot">
       <button class="splash-btn" data-splash-enter>进入小程序</button>
@@ -534,7 +584,7 @@ function renderHome() {
     ${statusBar()}
     <section class="hero">
       <div class="brandline">
-        <img class="logo" src="assets/blue-lotus.png" alt="新修嘉兴大藏经蓝色莲花标志">
+        <img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面">
         <div><h1>新修嘉兴大藏经</h1><p>新修嘉兴大藏经 · 大众护持平台</p></div>
       </div>
       <p class="hero-copy">为正本清源、弘法利生，由《嘉兴藏》（重辑·2008版）原班团队接续，引入 AI 与专家团队，重新修复、重新编序、重新增补。</p>
@@ -545,8 +595,7 @@ function renderHome() {
     </section>
     <div class="stats-band">
       <div class="stat"><strong>3,433</strong><span>计划收录部数</span></div>
-      <div class="stat"><strong>55万</strong><span>目录字数已完稿</span></div>
-      <div class="stat"><strong>2026—35</strong><span>编纂工作周期</span></div>
+      <div class="stat"><strong>已完成</strong><span>阅藏指南</span></div>
     </div>
 
     <section class="intro-section">
@@ -577,19 +626,19 @@ function renderHome() {
     </section>
 
     <section class="intro-section">
-      <div class="section-head"><div><h2>样书样例</h2><p>点击切换：封面 / 正文样张 / 功能簿</p></div></div>
+      <div class="section-head"><div><h2>样书样例</h2><p>点击切换：封面 / 正文样张 / 功德簿</p></div></div>
       <div class="book-sample">
         <div class="book-sample-tabs">
           <button class="${state.sampleTab === 'cover' ? 'active' : ''}" data-sample-tab="cover">封面</button>
           <button class="${state.sampleTab === 'page' ? 'active' : ''}" data-sample-tab="page">正文样张</button>
-          <button class="${state.sampleTab === 'ledger' ? 'active' : ''}" data-sample-tab="ledger">功能簿</button>
+          <button class="${state.sampleTab === 'ledger' ? 'active' : ''}" data-sample-tab="ledger">功德簿</button>
         </div>
         <div class="book-sample-body">${sampleBody()}</div>
       </div>
     </section>
 
     <section class="intro-section">
-      <div class="section-head"><div><h2>修经进度</h2><p>以部数计，已完成 / 进行中 / 待开始</p></div><button class="text-link" data-go="transparent">查看公开记录 ›</button></div>
+      <div class="section-head"><div><h2>修经进度</h2><p>以部数计，已完成 / 进行中 / 待开始</p></div><button class="text-link" data-go="transparent">查看募缘记录 ›</button></div>
       <div class="progress-counts">
         <div class="pc done" data-go="transparent"><b>${doneCount}</b><span>已圆满</span><small>专家复核 + 上版</small></div>
         <div class="pc doing" data-go="transparent"><b>${doingCount}</b><span>进行中</span><small>断句 · 编辑 · 复核</small></div>
@@ -600,7 +649,20 @@ function renderHome() {
 
     <section class="intro-section">
       <div class="section-head"><div><h2>大德高僧题词</h2><p>以法语与墨宝，为修藏大业作见证</p></div><button class="text-link" data-go="inscriptions">查看全部 ›</button></div>
-      <button class="card home-quote" data-go="inscriptions"><span class="home-quote-label">题</span><span class="home-quote-text">新修嘉兴大藏经</span><span class="home-quote-sign">恭请光泉大和尚 · 题词征集中</span><span class="chev">›</span></button>
+      <div class="inscription-grid">
+        <article class="card inscription-card" data-go="inscriptions">
+          <div class="inscription-img"><img src="assets/inscription-1-yicheng-publish.png" alt="一诚大和尚为《嘉兴藏》出版题词"></div>
+          <div class="inscription-info"><strong>一诚大和尚</strong><small>中国佛教协会会长 · 为《嘉兴藏》出版题词</small></div>
+        </article>
+        <article class="card inscription-card" data-go="inscriptions">
+          <div class="inscription-img"><img src="assets/inscription-2-yicheng-first.png" alt="一诚大和尚为《嘉兴藏》初版题词"></div>
+          <div class="inscription-info"><strong>一诚大和尚</strong><small>中国佛教协会会长 · 为《嘉兴藏》初版题词</small></div>
+        </article>
+        <article class="card inscription-card" data-go="inscriptions">
+          <div class="inscription-img"><img src="assets/inscription-3-benhuan.jpg" alt="本焕大和尚为重辑《嘉兴藏》题字"></div>
+          <div class="inscription-info"><strong>本焕大和尚</strong><small>为重辑《嘉兴藏》题字</small></div>
+        </article>
+      </div>
     </section>
 
     <section class="section" style="padding-bottom:22px"><div class="notice">人数、金额与实时进度为原型演示数据；区块链存证为建议能力；题词内容为原型示意，正式上线以获授权的墨宝扫描件为准。</div></section>
@@ -613,12 +675,12 @@ function sampleBody() {
   if (state.sampleTab === 'cover') {
     return `<div class="sample-compare">
       <figure class="sample-compare-item">
-        <div class="sample-compare-img"><img src="assets/puxian-cover-original.jpg" alt="封面·未修改"></div>
-        <figcaption>修藏前 · 未修改</figcaption>
+        <div class="sample-compare-img"><img src="assets/puxian-cover-original.jpg" alt="封面·未修改" data-zoom="assets/puxian-cover-original.jpg" data-zoom-caption="修藏前 · 封面未修改"></div>
+        <figcaption>修藏前 · 未修改<small class="zoom-hint">点击图片放大 ›</small></figcaption>
       </figure>
       <figure class="sample-compare-item">
-        <div class="sample-compare-img"><img src="assets/puxian-cover-fixed.jpg" alt="封面·已重修"></div>
-        <figcaption>修藏后 · 已重修</figcaption>
+        <div class="sample-compare-img"><img src="assets/puxian-cover-fixed.jpg" alt="封面·已重修" data-zoom="assets/puxian-cover-fixed.jpg" data-zoom-caption="修藏后 · 封面已重修"></div>
+        <figcaption>修藏后 · 已重修<small class="zoom-hint">点击图片放大 ›</small></figcaption>
       </figure>
     </div>
     <p class="sample-compare-note">${book.title}（${book.volume}·${book.pages}筒页）封面修藏前后对比</p>`;
@@ -626,12 +688,12 @@ function sampleBody() {
   if (state.sampleTab === 'page') {
     return `<div class="sample-compare">
       <figure class="sample-compare-item">
-        <div class="sample-compare-img"><img src="assets/puxian-text-original.jpg" alt="正文·未修复"></div>
-        <figcaption>正文修复前</figcaption>
+        <div class="sample-compare-img"><img src="assets/puxian-text-original.jpg" alt="正文·未修复" data-zoom="assets/puxian-text-original.jpg" data-zoom-caption="正文修复前"></div>
+        <figcaption>正文修复前<small class="zoom-hint">点击图片放大 ›</small></figcaption>
       </figure>
       <figure class="sample-compare-item">
-        <div class="sample-compare-img"><img src="assets/puxian-text-fixed.png" alt="正文·已修复"></div>
-        <figcaption>正文修复后</figcaption>
+        <div class="sample-compare-img"><img src="assets/puxian-text-fixed.png" alt="正文·已修复" data-zoom="assets/puxian-text-fixed.png" data-zoom-caption="正文修复后"></div>
+        <figcaption>正文修复后<small class="zoom-hint">点击图片放大 ›</small></figcaption>
       </figure>
     </div>
     <p class="sample-compare-note">${book.title} 正文修复前后对比</p>`;
@@ -641,16 +703,16 @@ function sampleBody() {
 
 // 功德簿视图（首页样书样例 + 经书预览弹窗共用）
 // 原则：一部经书只展示一位功德主（金额可能为续捐合并后的总额）
+// 展示形式：左侧基础信息 + 右侧牌记图片
 function renderBookLedger(book, list) {
   const total = list.reduce((s, d) => s + d.amount, 0);
-  const count = list.length;
   if (!list.length) {
     return `<div class="empty">尚无认捐记录<br><small>完成认捐后将自动展示</small></div>`;
   }
   const meritName = list[0].anonymous ? '匿名功德主' : list[0].name;
   return `
-    <div class="book-ledger">
-      <div class="book-ledger-info">
+    <div class="book-ledger-split">
+      <div class="book-ledger-info book-ledger-info-single">
         <div class="bli-row"><span>经名</span><b>${book.title}</b></div>
         <div class="bli-row"><span>卷数</span><b>${book.volume}</b></div>
         <div class="bli-row"><span>字数</span><b>260,968 字</b></div>
@@ -658,19 +720,11 @@ function renderBookLedger(book, list) {
         <div class="bli-row"><span>金额</span><b>¥${total.toLocaleString()}</b></div>
         <div class="bli-row"><span>功德芳名</span><b>${meritName}</b></div>
       </div>
-      <ul class="book-ledger-list">
-        ${list.map(d => `
-          <li>
-            <div class="bl-avatar">${(d.anonymous ? '匿' : d.name.charAt(0))}</div>
-            <div class="bl-main">
-              <strong>${d.anonymous ? '匿名功德主' : d.name}</strong>
-              <small>${d.date}${d.anonymous ? ' · 匿名展示' : ''}</small>
-            </div>
-            <div class="bl-amount">¥${d.amount.toLocaleString()}</div>
-          </li>
-        `).join('')}
-      </ul>
-      <p class="prototype-note" style="margin-top:10px">* 一部经书仅展示一位功德主；多次认捐将合并为同一行的金额。</p>
+      <div class="book-ledger-paiji">
+        <div class="blp-tag">牌记</div>
+        <img class="paiji-img" src="assets/paiji.png" alt="牌记" data-zoom="assets/paiji.png" data-zoom-caption="《${book.title}》修藏牌记">
+        <small class="zoom-hint">点击牌记放大 ›</small>
+      </div>
     </div>
   `;
 }
@@ -715,19 +769,16 @@ function renderCatalog() {
         <button data-catalog-tab="指南" class="${state.catalogTab === '指南' ? 'active' : ''}">阅藏指南</button>
       </div>
       <div class="catalog-view" role="tablist" aria-label="认捐视图">
-        <button data-catalog-view="全部" class="${view === '全部' ? 'active' : ''}">全部 <em>${countAll}</em></button>
-        <button data-catalog-view="可认捐" class="${view === '可认捐' ? 'active' : ''}">可认捐 <em>${countOpen}</em></button>
-        <button data-catalog-view="已认捐" class="${view === '已认捐' ? 'active' : ''}">已认捐 <em>${countDone}</em></button>
+        <button data-catalog-view="全部" class="${view === '全部' ? 'active' : ''}">全部 <em>3,433</em></button>
+        <button data-catalog-view="可认捐" class="${view === '可认捐' ? 'active' : ''}">可认捐 <em>3,426</em></button>
+        <button data-catalog-view="已认捐" class="${view === '已认捐' ? 'active' : ''}">已认捐 <em>7</em></button>
       </div>
       <label class="search" style="margin-top:12px"><span>⌕</span><input id="catalog-search" value="${state.query}" placeholder="搜索经名、编号或关键词" aria-label="搜索经书"></label>
-      <div class="chips">${['全部','经藏','般若部','史传部','中国撰述','宝积部','释经论部','律藏','瑜伽部','唯识部','事汇部','续藏'].map(item => `<button class="chip ${state.catalogFilter === item ? 'active' : ''}" data-filter="${item}">${item}</button>`).join('')}</div>
+      <div class="chips">${['全部','经藏','律藏','论藏','述藏'].map(item => `<button class="chip ${state.catalogFilter === item ? 'active' : ''}" data-filter="${item}">${item}</button>`).join('')}</div>
     </div>
-    <div class="card catalog-summary"><div><strong id="catalog-count">${filtered.length}</strong> 部匹配经书</div><span class="prototype-note">总目录 3,433 部 · 认捐 ¥${PER_PAGE_PRICE}/页</span></div>
-    <section class="section" style="padding-top:12px"><div id="catalog-list" class="book-list">${filtered.length ? filtered.map(bookCard).join('') : `<div class="card empty">${
-      view === '可认捐' ? '目前没有可认捐的经书，请切换到「全部」或「已认捐」查看' :
-      view === '已认捐' ? '尚无已认捐的经书，欢迎前往「可认捐」认捐首部经书' :
-      '未找到相关经书，请调整筛选条件'
-    }</div>`}</div></section>
+    ${state.catalogFilter === '全部' ? `<div class="card catalog-summary"><div><strong id="catalog-count">3,433</strong> 部匹配经书</div><span class="prototype-note">458,088 简页 · 认捐 ¥${PER_PAGE_PRICE}/页</span></div>` : ''}
+    ${renderCatalogList(filtered, view)}
+    ${renderCartBar()}
   </div>`;
 }
 
@@ -736,6 +787,83 @@ function filterByView(book, view) {
   if (view === '可认捐') return book.status === '可认捐' && !hasDonor;
   if (view === '已认捐') return hasDonor;
   return true;
+}
+
+// 经书目录列表渲染：按部类 → 子类型 分组，可折叠展开
+function renderCatalogList(filtered, view) {
+  // 已认捐 / 可认捐：维持原扁平列表（每条经书自身就是认捐单位）
+  if (view === '可认捐') {
+    const emptyMsg = '目前没有可认捐的经书，请切换到「全部」或「已认捐」查看';
+    return `<div id="catalog-list" class="book-list" style="padding:12px 16px 0">${filtered.length ? filtered.map(bookCard).join('') : `<div class="card empty">${emptyMsg}</div>`}</div>`;
+  }
+  if (view === '已认捐') {
+    const emptyMsg = '尚无已认捐的经书，欢迎前往「可认捐」认捐首部经书';
+    return `<div id="catalog-list" class="book-list" style="padding:12px 16px 0">${filtered.length ? filtered.map(bookCard).join('') : `<div class="card empty">${emptyMsg}</div>`}</div>`;
+  }
+
+  // 全部：按部类 → 子类型 分组（亦支持 catalogFilter 指定单个部类）
+  const sections = state.catalogFilter === '全部' ? ['经藏', '律藏', '论藏', '述藏'] : [state.catalogFilter];
+  const groups = [];
+  sections.forEach(section => {
+    const subs = SUBCATEGORIES[section] || [];
+    subs.forEach(sub => {
+      const items = filtered.filter(b => b.section === section && b.sub === sub.key);
+      groups.push({ section, sub, items });
+    });
+  });
+  const totalShown = groups.reduce((acc, g) => acc + g.items.length, 0);
+  if (!totalShown) return `<div class="card empty" style="margin:14px 16px 0">未找到相关经书，请调整筛选条件</div>`;
+
+  return `<section class="section sub-section">
+    ${groups.map((g, idx) => {
+      // 默认第一个子类型展开；其它按 subOpen 状态
+      const isOpen = state.subOpen[g.sub.key] !== undefined ? state.subOpen[g.sub.key] : idx === 0;
+      const selectedInSub = g.items.filter(b => state.cart.includes(b.id)).length;
+      const allSelected = g.items.length > 0 && selectedInSub === g.items.length;
+      const someSelected = selectedInSub > 0 && !allSelected;
+      const headerCheckbox = g.items.length
+        ? `<label class="sub-check" data-stop><input type="checkbox" data-sub-toggle="${g.sub.key}" ${allSelected ? 'checked' : ''} ${someSelected ? 'data-indeterminate="1"' : ''}><span></span></label>`
+        : '';
+      return `<div class="sub-group ${isOpen ? 'open' : 'closed'}" data-sub-group="${g.sub.key}">
+        <div class="sub-head" data-sub-toggle-row="${g.sub.key}">
+          ${headerCheckbox}
+          <div class="sub-head-info">
+            <div class="sub-head-row1"><span class="sub-tag">${g.sub.tag}</span><span class="sub-name">${g.sub.name}</span><span class="sub-total">共 ${g.sub.count} 部 ${g.sub.volume} 卷</span></div>
+            <div class="sub-head-row2">${g.sub.desc}</div>
+          </div>
+          <span class="sub-caret ${isOpen ? 'open' : ''}">▾</span>
+        </div>
+        ${isOpen ? `<div class="sub-body">
+          <div class="sub-meta-line">${g.items.length} 部匹配${selectedInSub ? ` · 已选 ${selectedInSub} 部` : ''}</div>
+          <div class="book-list">${g.items.length ? g.items.map(bookCard).join('') : '<div class="card empty">此子类型暂无匹配经书</div>'}</div>
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </section>`;
+}
+
+// 计算当前购物车合计金额（只统计"可认捐"状态的经书，防御性过滤）
+function cartSummary() {
+  const ids = state.cart;
+  const booksInCart = ids.map(id => books.find(b => b.id === id)).filter(Boolean);
+  const total = booksInCart.reduce((sum, b) => sum + (b.amount || 0), 0);
+  return { count: booksInCart.length, total, books: booksInCart };
+}
+
+// 底部认捐清单条（仅当选中数 > 0 时显示）
+function renderCartBar() {
+  const { count, total } = cartSummary();
+  if (!count) return '';
+  return `<div class="cart-bar" data-cart-bar>
+    <div class="cart-bar-info">
+      <div class="cart-bar-count">已选 <b>${count}</b> 部</div>
+      <div class="cart-bar-total">合计 <b>¥${total.toLocaleString()}</b></div>
+    </div>
+    <div class="cart-bar-actions">
+      <button class="text-link" data-cart-clear>清空</button>
+      <button class="btn btn-primary" data-cart-go>去认捐 ›</button>
+    </div>
+  </div>`;
 }
 
 function renderGuide() {
@@ -750,7 +878,7 @@ function renderGuide() {
       <div class="section-head"><div><h2>入藏路径</h2><p>建议按以下顺序开始</p></div></div>
       <div class="home-action-list">
         <article class="card home-action"><div class="home-action-mark">知</div><div class="home-action-body"><strong>一、了解版本特色</strong><small>了解方册本嘉兴藏的历史价值与本次新修的范围</small></div></article>
-        <article class="card home-action"><div class="home-action-mark blue">选</div><div class="home-action-body"><strong>二、选择部类</strong><small>按经·律·论·史传·中国撰述等分类建立阅读计划</small></div></article>
+        <article class="card home-action"><div class="home-action-mark blue">选</div><div class="home-action-body"><strong>二、选择部类</strong><small>按经藏·律藏·论藏·述藏四部分类建立阅读计划</small></div></article>
         <article class="card home-action"><div class="home-action-mark blue">阅</div><div class="home-action-body"><strong>三、阅读内容提要</strong><small>每部经书提供核心思想、历史背景和修学要点</small></div></article>
         <article class="card home-action"><div class="home-action-mark">护</div><div class="home-action-body"><strong>四、随喜护持与共修</strong><small>可认捐经书，支持修藏大业</small></div></article>
       </div>
@@ -761,9 +889,7 @@ function renderGuide() {
         <button class="chip" data-filter="经藏">经藏</button>
         <button class="chip" data-filter="律藏">律藏</button>
         <button class="chip" data-filter="论藏">论藏</button>
-        <button class="chip" data-filter="般若部">般若部</button>
-        <button class="chip" data-filter="史传部">史传部</button>
-        <button class="chip" data-filter="中国撰述">中国撰述</button>
+        <button class="chip" data-filter="述藏">述藏</button>
       </div>
     </section>
     <section class="section" style="padding-bottom:22px"><button class="btn btn-primary btn-block" data-go="catalog-list">进入经书目录</button></section>
@@ -776,8 +902,26 @@ function bookCard(book) {
   const statusLabel = hasDonor ? '已认捐' : book.status;
   const badgeClass = statusLabel === '已圆满' ? 'gray' : statusLabel === '已认捐' ? 'gray' : 'gold';
   const stageInfo = STAGES.find(s => s.code === book.stage) || STAGES[0];
-  return `<article class="card book-card" data-book="${book.id}">
-    <div class="book-meta"><div><span class="book-title">${book.title}</span><span class="book-code">${book.id} · ${book.section} · ${book.volume}</span></div><span class="badge ${badgeClass}">${statusLabel}</span></div>
+  // 批量认捐：仅在「可认捐」视图下显示复选框，已认捐/已圆满经书不能加入购物车
+  const selectable = book.status === '可认捐' && !hasDonor;
+  const checked = selectable && state.cart.includes(book.id);
+  const sub = (SUBCATEGORIES[book.section] || []).find(s => s.key === book.sub);
+  const subTag = sub ? `<span class="book-sub">${sub.tag} · ${sub.name}</span>` : '';
+  const checkbox = selectable
+    ? `<label class="book-check" data-stop><input type="checkbox" data-cart="${book.id}" ${checked ? 'checked' : ''}><span></span></label>`
+    : '';
+  return `<article class="card book-card ${checked ? 'is-checked' : ''}" data-book="${book.id}">
+    <div class="book-meta">
+      <div class="book-meta-info">
+        <span class="book-title">${book.title}</span>
+        <span class="book-code">${book.id} · ${book.section} · ${book.volume}</span>
+        ${subTag}
+      </div>
+      <div class="book-meta-side">
+        ${checkbox}
+        <span class="badge ${badgeClass}">${statusLabel}</span>
+      </div>
+    </div>
     <p>${book.summary}</p>
     <div class="book-stage ${stageInfo.code}">
       <span class="stage-dot"></span>
@@ -793,26 +937,21 @@ function bookCard(book) {
   </article>`;
 }
 
-/* ========== 公开（3 个模块，已移除赠书） ========== */
+/* ========== 募缘（3 个模块，已移除赠书） ========== */
 function renderTransparent() {
   const t = state.transparentTab;
   const content = t === '进度' ? myProgressContent() : t === '资金' ? myFundContent() : ledgerContent();
   return `<div class="page">
     ${statusBar()}
-    <header class="topbar"><span style="width:44px"></span><h1>我的公开</h1><button class="icon-btn" data-action="verify" aria-label="证书验证">⌕</button></header>
-    <section class="section" style="padding-top:14px"><div class="segment">${['进度','资金','功德簿'].map(tab => `<button class="${state.transparentTab === tab ? 'active' : ''}" data-transparent="${tab}">${tab}</button>`).join('')}</div></section>
+    <header class="topbar"><span style="width:44px"></span><h1>我的募缘</h1><button class="icon-btn" data-action="verify" aria-label="证书验证">⌕</button></header>
+    <section class="section" style="padding-top:14px"><div class="segment">${['进度','资金','募缘录'].map(tab => `<button class="${state.transparentTab === tab ? 'active' : ''}" data-transparent="${tab}">${tab}</button>`).join('')}</div></section>
     <section class="section" style="padding-top:14px">${content}</section>
     ${t === '进度' ? `
     <section class="section">
       <div class="section-head"><div><h2>证书在线认证</h2><p>输入证书编号验证真伪</p></div></div>
       <button class="btn btn-block" data-action="verify">立即验证</button>
-    </section>` : ''}
-    <section class="section">
-      <div class="section-head"><div><h2>可信追溯</h2><p>关键动作生成唯一存证编号</p></div></div>
-      <article class="card trace-card"><div class="trace-head"><strong>最近存证记录</strong><span class="badge">已上链*</span></div><div class="trace-hash">0x8fd4a7c2e19b58d6f0310a9c...JX20260811</div><div class="book-footer"><span>2026-08-11 16:28:04</span><button class="text-link" data-action="trace">查看详情 ›</button></div></article>
-      <p class="prototype-note" style="line-height:1.6;margin-top:8px">* 区块链存证为建议能力，原型展示记录结构与验证路径。</p>
     </section>
-    <section class="section" style="padding-bottom:22px"><button class="btn btn-block btn-ghost" data-go="consult">修藏专项咨询</button></section>
+    <section class="section" style="padding-bottom:22px"><button class="btn btn-block btn-ghost" data-go="consult">修藏专项咨询</button></section>` : ''}
   </div>`;
 }
 
@@ -860,25 +999,26 @@ function myFundContent() {
   }
   const cards = list.map(book => {
     const donated = book.donation.amount;
-    // 简单演示：按进度比例计算「已使用」金额，剩余 = 总额 - 已使用
-    const progress = book.progress || 0;
-    const used = Math.round(donated * progress / 100);
-    const remaining = donated - used;
+    const payMethod = book.donation.payMethod || '微信支付';
+    const tradeNo = book.donation.tradeNo || `TX${(book.donation.date || '').replace(/-/g, '')}0001`;
+    const volume = book.volume || (books.find(b => b.id === book.id)?.volume) || '';
     return `<article class="card fund-book">
       <div class="fund-book-head"><strong>${book.title}</strong><span class="badge">${book.id}</span></div>
       <div class="fund-book-info">
-        <div><span>认捐总额</span><b>¥${donated.toLocaleString()}</b></div>
-        <div><span>已使用</span><b>¥${used.toLocaleString()}</b></div>
-        <div><span>剩余</span><b>¥${remaining.toLocaleString()}</b></div>
+        <div><span>经书名称</span><b>${book.title}</b></div>
+        <div><span>卷数</span><b>${volume}</b></div>
+        <div><span>筒页</span><b>${book.pages}</b></div>
+        <div><span>金额</span><b>¥${donated.toLocaleString()}</b></div>
+        <div><span>捐赠日期</span><b>${book.donation.date}</b></div>
+        <div><span>支付方式</span><b>${payMethod}</b></div>
       </div>
-      <div class="book-progress-label" style="margin-top:8px"><span>资金使用进度</span><b>${progress}%</b></div>
-      <div class="progress gold"><i style="width:${progress}%"></i></div>
+      <div class="fund-book-trade"><span>交易单号</span><b>${tradeNo}</b></div>
     </article>`;
   }).join('');
   return `
-    <div class="section-head"><div><h2>我的认捐经书 · 资金使用</h2><p>按经书为单位展示已使用 / 剩余</p></div></div>
+    <div class="section-head"><div><h2>我的认捐经书 · 资金信息</h2><p>按经书为单位展示认捐金额与支付信息</p></div></div>
     <div class="book-list">${cards}</div>
-    <div class="notice" style="margin-top:12px">资金使用明细按经书展示，已使用金额按当前修藏进度同比例计算；剩余资金将继续用于后续编辑、排版与出版准备。</div>`;
+    <div class="notice" style="margin-top:12px">资金使用明细按经书展示；交易单号对应每一笔认捐的支付记录，可在认证页查询。</div>`;
 }
 
 function fundContent() {
@@ -890,13 +1030,26 @@ function fundContent() {
 // 注：旧 fundContent 保留以便向下兼容；溯 tab 资金板块已切换为 myFundContent（按经书为单位）
 
 function ledgerContent() {
-  return `<div class="section-head"><div><h2>公开功德簿</h2><p>经授权展示的护持记录</p></div><span class="badge">实时更新*</span></div>
-  <div class="ledger-list">${donations.map(ledgerRow).join('')}</div>
+  return `<div class="section-head"><div><h2>公开募缘录</h2><p>经授权展示的护持记录</p></div><span class="badge">实时更新*</span></div>
+  <div class="ledger-list">${donations.map(item => ledgerRow(item)).join('')}</div>
   <div class="notice" style="margin-top:12px">每笔认捐均关联电子协议、支付记录与唯一存证编号；功德主可选择公开称谓或匿名展示。</div>`;
 }
 
 function ledgerRow(item) {
-  return `<article class="card ledger-row"><div class="avatar">${item.name[0]}</div><div class="ledger-main"><strong>${item.name}</strong><small>${item.book} · ${item.date}</small></div><div class="amount">¥${item.amount.toLocaleString()}</div></article>`;
+  const book = books.find(b => b.id === item.bookId);
+  const volume = book ? book.volume : '';
+  const pages = book ? book.pages : '';
+  return `<article class="card ledger-row ledger-detail">
+    <div class="ledger-grid">
+      <div class="lg-row"><span>经名</span><b>${item.book}</b></div>
+      <div class="lg-row"><span>卷数</span><b>${volume}</b></div>
+      <div class="lg-row"><span>字数</span><b>260,968 字</b></div>
+      <div class="lg-row"><span>筒页</span><b>${pages}</b></div>
+      <div class="lg-row"><span>金额</span><b class="amount">¥${item.amount.toLocaleString()}</b></div>
+      <div class="lg-row"><span>功德芳名</span><b>${item.name}</b></div>
+      <div class="lg-row lg-full"><span>捐赠日期</span><b>${item.date}</b></div>
+    </div>
+  </article>`;
 }
 
 /* ========== 我的（功德主中心，已移除赠书和藏经编辑入口） ========== */
@@ -907,7 +1060,7 @@ function renderProfile() {
     ${statusBar()}
     <section class="profile-head">
       <div class="profile-user">
-        <div class="profile-avatar">莲</div>
+        <div class="profile-avatar profile-avatar-img"><svg class="profile-avatar-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"></circle><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="currentColor"></path></svg></div>
         <div><h2>${state.user.name}</h2><p>功德主编号 ${state.user.code}</p></div>
         <button class="btn" style="margin-left:auto;border-color:rgba(255,255,255,.45);color:white;background:transparent" data-action="profile-edit">资料</button>
       </div>
@@ -965,7 +1118,7 @@ function renderProfileGuest() {
     </section>
     <section class="section">
       <div class="card menu">
-        <button class="menu-row" data-go="transparent"><span class="menu-icon">溯</span><span>公开与查询</span><small>无需登录 ›</small></button>
+        <button class="menu-row" data-go="transparent"><span class="menu-icon">溯</span><span>募缘与查询</span><small>无需登录 ›</small></button>
         <button class="menu-row" data-go="consult"><span class="menu-icon">问</span><span>专项咨询</span><small>›</small></button>
         <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴大藏经</span><small>›</small></button>
       </div>
@@ -1005,8 +1158,53 @@ function bindPageEvents() {
   document.querySelectorAll('[data-transparent]').forEach(el => el.addEventListener('click', () => { state.transparentTab = el.dataset.transparent; render(); }));
   document.querySelectorAll('[data-catalog-tab]').forEach(el => el.addEventListener('click', () => { state.catalogTab = el.dataset.catalogTab; render(); }));
   document.querySelectorAll('[data-catalog-view]').forEach(el => el.addEventListener('click', () => { state.catalogView = el.dataset.catalogView; render(); }));
-  document.querySelectorAll('[data-action]').forEach(el => el.addEventListener('click', () => handleAction(el.dataset.action)));
+  document.querySelectorAll('[data-action]').forEach(el => el.addEventListener('click', e => { if (e.target.closest('[data-stop]')) { e.stopPropagation(); } else handleAction(el.dataset.action); }));
   document.querySelectorAll('[data-sample-tab]').forEach(el => el.addEventListener('click', () => { state.sampleTab = el.dataset.sampleTab; render(); }));
+  document.querySelectorAll('[data-zoom]').forEach(el => el.addEventListener('click', () => openZoom(el.dataset.zoom, el.dataset.zoomCaption)));
+  // 子类型折叠/展开
+  // 子类型折叠/展开（点击 header 区域时触发；checkbox 自身 click 会 stopPropagation）
+  document.querySelectorAll('[data-sub-toggle-row]').forEach(el => el.addEventListener('click', e => {
+    if (e.target.closest('[data-stop]')) return; // 来自 checkbox 的点击直接放行，不翻转折叠
+    const key = el.dataset.subToggleRow;
+    const current = state.subOpen[key];
+    state.subOpen[key] = current === undefined ? false : !current;
+    render();
+  }));
+  // 子类型全选 / 全不选
+  document.querySelectorAll('[data-sub-toggle]').forEach(el => el.addEventListener('change', e => {
+    e.stopPropagation();
+    const key = el.dataset.subToggle;
+    const sub = (SUBCATEGORIES[state.catalogFilter] || []).find(s => s.key === key)
+            || Object.values(SUBCATEGORIES).flat().find(s => s.key === key);
+    if (!sub) return;
+    const ids = books.filter(b => b.sub === key && b.status === '可认捐' && !(donors[b.id] && donors[b.id].length > 0)).map(b => b.id);
+    if (el.checked) {
+      state.cart = Array.from(new Set([...state.cart, ...ids]));
+    } else {
+      const set = new Set(ids);
+      state.cart = state.cart.filter(id => !set.has(id));
+    }
+    render();
+  }));
+  // 单本勾选
+  document.querySelectorAll('[data-cart]').forEach(el => el.addEventListener('change', e => {
+    e.stopPropagation();
+    const id = el.dataset.cart;
+    if (el.checked) {
+      if (!state.cart.includes(id)) state.cart = [...state.cart, id];
+    } else {
+      state.cart = state.cart.filter(x => x !== id);
+    }
+    // 局部刷新底部条与卡片样式即可，避免全量 render（搜索框不丢焦）
+    const bar = document.querySelector('[data-cart-bar]');
+    if (bar) bar.outerHTML = renderCartBar();
+    const card = el.closest('.book-card');
+    if (card) card.classList.toggle('is-checked', el.checked);
+    bindCartBar();
+  }));
+  // 阻止勾选框区域触发 openBook
+  document.querySelectorAll('[data-stop]').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+  bindCartBar();
   const search = document.querySelector('#catalog-search');
   if (search) search.addEventListener('input', event => {
     state.query = event.target.value.trim();
@@ -1022,10 +1220,54 @@ function bindPageEvents() {
       else categoryPass = book.section === state.catalogFilter;
       return viewPass && categoryPass && (!state.query || `${book.title}${book.summary}${book.id}`.includes(state.query));
     }).slice().sort((a, b) => a.id.localeCompare(b.id, 'zh-Hans-CN', { numeric: true }));
-    document.querySelector('#catalog-count').textContent = filtered.length;
-    document.querySelector('#catalog-list').innerHTML = filtered.length ? filtered.map(bookCard).join('') : '<div class="card empty">未找到相关经书，请调整筛选条件</div>';
-    document.querySelectorAll('[data-book]').forEach(el => el.addEventListener('click', () => openBook(el.dataset.book)));
+    const host = document.querySelector('.sub-section') || document.querySelector('#catalog-list');
+    if (host) host.outerHTML = renderCatalogList(filtered, state.catalogView);
+    bindCatalogListEvents();
+    bindCartBar();
   });
+}
+
+// 复用：搜索时局部替换列表后，需要重新绑定列表内事件
+function bindCatalogListEvents() {
+  document.querySelectorAll('[data-sub-toggle-row]').forEach(el => el.addEventListener('click', e => {
+    if (e.target.closest('[data-stop]')) return;
+    const key = el.dataset.subToggleRow;
+    const current = state.subOpen[key];
+    state.subOpen[key] = current === undefined ? false : !current;
+    render();
+  }));
+  document.querySelectorAll('[data-sub-toggle]').forEach(el => el.addEventListener('change', e => {
+    e.stopPropagation();
+    const key = el.dataset.subToggle;
+    const ids = books.filter(b => b.sub === key && b.status === '可认捐' && !(donors[b.id] && donors[b.id].length > 0)).map(b => b.id);
+    if (el.checked) state.cart = Array.from(new Set([...state.cart, ...ids]));
+    else state.cart = state.cart.filter(id => !ids.includes(id));
+    render();
+  }));
+  document.querySelectorAll('[data-cart]').forEach(el => el.addEventListener('change', e => {
+    e.stopPropagation();
+    const id = el.dataset.cart;
+    if (el.checked) { if (!state.cart.includes(id)) state.cart = [...state.cart, id]; }
+    else state.cart = state.cart.filter(x => x !== id);
+    const bar = document.querySelector('[data-cart-bar]');
+    if (bar) bar.outerHTML = renderCartBar();
+    const card = el.closest('.book-card');
+    if (card) card.classList.toggle('is-checked', el.checked);
+    bindCartBar();
+  }));
+  document.querySelectorAll('[data-stop]').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+}
+
+// 购物车底部条事件绑定（按钮随时存在，但只在有选中时显示）
+function bindCartBar() {
+  document.querySelectorAll('[data-cart-clear]').forEach(el => el.addEventListener('click', () => {
+    state.cart = [];
+    render();
+  }));
+  document.querySelectorAll('[data-cart-go]').forEach(el => el.addEventListener('click', () => {
+    if (!state.cart.length) return showToast('请先选择要认捐的经书');
+    openCartPledge();
+  }));
 }
 
 document.querySelectorAll('.tab-item').forEach(item => item.addEventListener('click', () => setPage(item.dataset.tab)));
@@ -1051,6 +1293,110 @@ function handleAction(action) {
   if (action === 'about') return openAbout();
   if (action === 'simulate-invite-donation') return simulateInviteDonation();
   showToast(messages[action] || '功能已响应');
+}
+
+/* ========== 批量认捐（来自经目购物车） ========== */
+function openCartPledge() {
+  const { books: picked, count, total } = cartSummary();
+  if (!count) return showToast('请先选择要认捐的经书');
+  state.pledgeStep = state.loggedIn ? 1 : 0;
+  state._cartBooks = picked;
+  state.amount = total;
+  renderCartPledge();
+}
+
+function renderCartPledge() {
+  const totalSteps = 4;
+  const steps = `<div class="steps">${Array.from({length: totalSteps}, (_, i) => `<i class="${state.pledgeStep >= i ? 'active' : ''}"></i>`).join('')}</div>`;
+  const books = state._cartBooks || [];
+  const count = books.length;
+  const total = state.amount;
+  let body = '';
+  let actions = '';
+  if (state.pledgeStep === 0) {
+    body = `<h3 class="flow-title">先完成会员注册</h3><p class="flow-desc">本次共认捐 ${count} 部经书，用于建立功德主账号、签署协议并接收荣誉证书。</p>${loginFields()}<label class="check"><input id="privacy" type="checkbox"><span>我已阅读并同意《用户服务协议》与《隐私政策》</span></label>`;
+    actions = `<button class="btn btn-ghost" data-prev>取消</button><button class="btn btn-primary" data-next>注册并继续</button>`;
+  } else if (state.pledgeStep === 1) {
+    const listHtml = `<div class="cart-pledge-list">${books.map(b => `<div class="cart-pledge-row"><span>${b.title}</span><small>${b.id} · ${b.section} · ${b.volume}</small><b>¥${b.amount.toLocaleString()}</b></div>`).join('')}</div>`;
+    body = `<h3 class="flow-title">阅读并签署捐款协议</h3><p class="flow-desc">本次共认捐 ${count} 部经书，合计 ¥${total.toLocaleString()}。</p>
+      ${listHtml}
+      <div class="agreement"><b>《新修嘉兴大藏经》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
+      <div class="field" style="margin-top:14px"><label>电子签名</label><canvas id="signature" class="sign-canvas" width="360" height="140"></canvas><div class="sign-tools"><span>请在框内手写签名</span><button class="text-link" id="clear-sign">清除</button></div></div>
+      <label class="check" style="margin-top:14px"><input id="agree" type="checkbox"><span>本人已完整阅读、理解并接受协议内容</span></label>`;
+    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>确认签署</button>`;
+  } else if (state.pledgeStep === 2) {
+    body = `<h3 class="flow-title">展示偏好设置</h3><p class="flow-desc">您可以控制对外公开的姓名与是否在功德簿中展示</p>
+      <div class="pledge-pref">
+        <label class="check"><input id="pref-real-name" type="checkbox" ${state.pledgeUseRealName ? 'checked' : ''}><span><b>是否使用真实姓名签约</b><small>开启后，荣誉证书、捐款协议展示您的真实姓名；关闭后将用法号 / 昵称。</small></span></label>
+        <label class="check"><input id="pref-show-ledger" type="checkbox" ${state.pledgeShowInLedger ? 'checked' : ''}><span><b>是否同意展示在功德簿</b><small>开启后，您的认捐记录将公开在"募缘录 → 功德簿"中。</small></span></label>
+      </div>
+      <div class="field" id="display-name-field" style="${state.pledgeUseRealName ? '' : 'display:none'}"><label>${state.pledgeUseRealName ? '签约显示姓名' : '法号 / 昵称'}</label><input id="display-name" value="${state.user.name}" placeholder="如：${state.user.name}"></div>
+      <div class="notice" style="margin-top:12px">提示：以上两项选择仅影响公开展示，不影响您的实际护持权益与积分到账。</div>
+      <div class="payment-box" style="margin-top:12px"><div class="payment-line payment-total"><span>本次合计</span><strong>¥${total.toLocaleString()}</strong></div></div>`;
+    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-gold" data-next>确认支付</button>`;
+  } else {
+    body = `<div class="center"><div class="success-mark">✓</div><h3 class="flow-title">护持圆满</h3><p class="flow-desc">已合计获得 ${total.toLocaleString()} 功德积分，本次共认捐 ${count} 部经书，记录与电子协议已存证。</p></div>${certificateHtml({ amount: total, book: `批量认捐 · 共 ${count} 部经书` })}`;
+    actions = `<button class="btn btn-ghost" data-close>完成</button>`;
+  }
+  overlayRoot.innerHTML = `<div class="overlay"><section class="sheet">${steps}<div class="sheet-body">${body}</div><div class="sheet-actions">${actions}</div></section></div>`;
+  bindOverlayBase();
+  overlayRoot.querySelector('[data-next]')?.addEventListener('click', nextCartPledge);
+  overlayRoot.querySelector('[data-prev]')?.addEventListener('click', () => { state.pledgeStep -= 1; renderCartPledge(); });
+  if (state.pledgeStep === 1) setupSignature();
+  if (state.pledgeStep === 2) {
+    const realName = document.querySelector('#pref-real-name');
+    const showLedger = document.querySelector('#pref-show-ledger');
+    realName?.addEventListener('change', () => {
+      state.pledgeUseRealName = realName.checked;
+      const field = document.querySelector('#display-name-field');
+      if (field) field.style.display = state.pledgeUseRealName ? '' : 'none';
+    });
+    showLedger?.addEventListener('change', () => { state.pledgeShowInLedger = showLedger.checked; });
+  }
+}
+
+function nextCartPledge() {
+  if (state.pledgeStep === 0) {
+    if (!document.querySelector('#privacy')?.checked) return showToast('请先同意用户协议与隐私政策');
+    const phone = document.querySelector('#phone').value.trim();
+    const name = document.querySelector('#name').value.trim() || '居士';
+    if (!phone) return showToast('请填写手机号');
+    state.loggedIn = true;
+    state.user = { name, phone, code: `GDZ-20260812-${String(286 + state.myDonations.length).padStart(4, '0')}` };
+  }
+  if (state.pledgeStep === 1) {
+    if (!state.signature) return showToast('请先完成电子签名');
+    if (!document.querySelector('#agree')?.checked) return showToast('请确认接受捐款协议');
+  }
+  if (state.pledgeStep === 2) {
+    state.pledgeUseRealName = document.querySelector('#pref-real-name')?.checked ?? true;
+    state.pledgeShowInLedger = document.querySelector('#pref-show-ledger')?.checked ?? true;
+    const displayNameInput = document.querySelector('#display-name');
+    const displayName = (displayNameInput?.value.trim()) || state.user.name;
+    const isAnonymous = !state.pledgeShowInLedger;
+    const signedName = state.pledgeUseRealName ? displayName : (displayName || '护法居士');
+    const picked = state._cartBooks || [];
+    const finalDate = formatDate2();
+    picked.forEach(b => {
+      const bookId = b.id;
+      const existing = (donors[bookId] && donors[bookId][0]) || null;
+      const mergedAmount = existing ? existing.amount + b.amount : b.amount;
+      const certId = `CERT-${formatDate()}-${String(state.certificates.length + 1).padStart(3, '0')}`;
+      const cert = { id: certId, book: b.title, amount: b.amount, bookId, volume: b.volume, date: finalDate, useRealName: state.pledgeUseRealName, showInLedger: state.pledgeShowInLedger, signedName };
+      state.certificates.push(cert);
+      state.myDonations.push({ certId, book: b.title, amount: b.amount, bookId, volume: b.volume, date: finalDate, anonymous: existing ? existing.anonymous : isAnonymous, payMethod: '微信支付', tradeNo: `TX${formatDate()}${String(state.certificates.length).padStart(4, '0')}` });
+      state.points.unshift({ type: 'donation', title: `认捐《${b.title}》（${b.pages}页）`, amount: b.amount, date: finalDate });
+      const finalName = existing ? existing.name : (isAnonymous ? '匿名功德主' : signedName);
+      donors[bookId] = [{ name: finalName, amount: mergedAmount, date: finalDate, anonymous: existing ? existing.anonymous : isAnonymous, realName: existing ? existing.realName : state.pledgeUseRealName }];
+      const idx = donations.findIndex(d => d.book === b.title);
+      const donationRow = { name: finalName, book: b.title, bookId, amount: mergedAmount, date: finalDate };
+      if (idx >= 0) donations[idx] = donationRow; else donations.unshift(donationRow);
+    });
+    state.cart = [];
+    state._cartBooks = null;
+  }
+  state.pledgeStep += 1;
+  renderCartPledge();
 }
 
 /* ========== 关于弹窗 ========== */
@@ -1097,12 +1443,12 @@ function renderPreview() {
   if (tab === 'cover') {
     body = `<div class="sample-compare">
         <figure class="sample-compare-item">
-          <div class="sample-compare-img"><img src="assets/puxian-cover-original.jpg" alt="封面·未修改"></div>
-          <figcaption>修藏前 · 未修改</figcaption>
+          <div class="sample-compare-img"><img src="assets/puxian-cover-original.jpg" alt="封面·未修改" data-zoom="assets/puxian-cover-original.jpg" data-zoom-caption="修藏前 · 封面未修改"></div>
+          <figcaption>修藏前 · 未修改<small class="zoom-hint">点击图片放大 ›</small></figcaption>
         </figure>
         <figure class="sample-compare-item">
-          <div class="sample-compare-img"><img src="assets/puxian-cover-fixed.jpg" alt="封面·已重修"></div>
-          <figcaption>修藏后 · 已重修</figcaption>
+          <div class="sample-compare-img"><img src="assets/puxian-cover-fixed.jpg" alt="封面·已重修" data-zoom="assets/puxian-cover-fixed.jpg" data-zoom-caption="修藏后 · 封面已重修"></div>
+          <figcaption>修藏后 · 已重修<small class="zoom-hint">点击图片放大 ›</small></figcaption>
         </figure>
       </div>
       <p class="sample-compare-note">${book.title}（${book.volume}·${book.pages}筒页）封面修藏前后对比</p>
@@ -1117,12 +1463,12 @@ function renderPreview() {
   } else {
     body = `<div class="sample-compare">
         <figure class="sample-compare-item">
-          <div class="sample-compare-img"><img src="assets/puxian-text-original.jpg" alt="正文·未修复"></div>
-          <figcaption>正文修复前</figcaption>
+          <div class="sample-compare-img"><img src="assets/puxian-text-original.jpg" alt="正文·未修复" data-zoom="assets/puxian-text-original.jpg" data-zoom-caption="正文修复前"></div>
+          <figcaption>正文修复前<small class="zoom-hint">点击图片放大 ›</small></figcaption>
         </figure>
         <figure class="sample-compare-item">
-          <div class="sample-compare-img"><img src="assets/puxian-text-fixed.png" alt="正文·已修复"></div>
-          <figcaption>正文修复后</figcaption>
+          <div class="sample-compare-img"><img src="assets/puxian-text-fixed.png" alt="正文·已修复" data-zoom="assets/puxian-text-fixed.png" data-zoom-caption="正文修复后"></div>
+          <figcaption>正文修复后<small class="zoom-hint">点击图片放大 ›</small></figcaption>
         </figure>
       </div>
       <p class="sample-compare-note">${book.title} 正文修复前后对比</p>
@@ -1136,7 +1482,7 @@ function renderPreview() {
     <div class="preview-tabs">
       <button class="${tab === 'cover' ? 'active' : ''}" data-preview-tab="cover">封面</button>
       <button class="${tab === 'page' ? 'active' : ''}" data-preview-tab="page">正文样张</button>
-      <button class="${tab === 'ledger' ? 'active' : ''}" data-preview-tab="ledger">功能簿</button>
+      <button class="${tab === 'ledger' ? 'active' : ''}" data-preview-tab="ledger">功德簿</button>
     </div>
     <div class="preview-body">${body}</div>
     ${isPledgeable
@@ -1161,16 +1507,19 @@ function bindPreview() {
     render();
   }));
   overlayRoot.querySelector('[data-preview-pledge]')?.addEventListener('click', () => {
-    state.preview = null;
     overlayRoot.innerHTML = '';
+    state.preview = null;
+    if (!state.loggedIn) { showLoginThen(() => startPledge()); return; }
     startPledge();
   });
   overlayRoot.querySelector('[data-preview-follow]')?.addEventListener('click', () => {
     state.preview = null;
     overlayRoot.innerHTML = '';
+    if (!state.loggedIn) { showLoginThen(() => {}); return; }
     showToast('已关注该经书进度');
     render();
   });
+  overlayRoot.querySelectorAll('[data-zoom]').forEach(el => el.addEventListener('click', () => openZoom(el.dataset.zoom, el.dataset.zoomCaption)));
 }
 
 function startPledge() {
@@ -1192,17 +1541,29 @@ function renderPledge() {
     body = `<h3 class="flow-title">阅读并签署捐款协议</h3><p class="flow-desc">认捐经书：${state.selectedBook.title}（共${state.selectedBook.pages}页）</p>
       <div class="agreement"><b>《新修嘉兴大藏经》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分，可在平台购物时使用（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
       <div class="field" style="margin-top:14px"><label>电子签名</label><canvas id="signature" class="sign-canvas" width="360" height="140"></canvas><div class="sign-tools"><span>请在框内手写签名</span><button class="text-link" id="clear-sign">清除</button></div></div>
+      <div class="field" style="margin-top:14px">
+        <label>常住地区</label>
+        <div class="address-fields">
+          <div class="address-row">
+            <span class="address-tag">国别</span>
+            <select id="region-country"><option value="">请选择国别</option>${REGION_COUNTRIES.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+          </div>
+          <div class="address-row">
+            <span class="address-tag">省份</span>
+            <select id="region-province"><option value="">请选择省份</option>${REGION_PROVINCES.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
+          </div>
+          <div class="address-row">
+            <span class="address-tag">城市</span>
+            <select id="region-city"><option value="">请选择城市</option>${REGION_CITIES.map(c => `<option value="${c}">${c}</option>`).join('')}</select>
+          </div>
+        </div>
+      </div>
       <label class="check"><input id="agree" type="checkbox"><span>本人已完整阅读、理解并接受协议内容</span></label>`;
     actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>确认签署</button>`;
   } else if (state.pledgeStep === 2) {
-    const options = [
-      state.selectedBook.amount,
-      Math.round(state.selectedBook.amount * 1.1),
-      Math.round(state.selectedBook.amount * 1.2)
-    ];
     body = `<h3 class="flow-title">确认护持金额</h3><p class="flow-desc">认捐经书：${state.selectedBook.title} · 共${state.selectedBook.pages}页 · ¥${PER_PAGE_PRICE}/页</p>
       <div class="field"><label>认捐金额（修一页 ¥${PER_PAGE_PRICE}）</label>
-        <div class="amount-options">${options.map((value, i) => `<button class="amount-option ${state.amount === value ? 'active' : ''}" data-amount="${value}">¥${value.toLocaleString()}${i > 0 ? '（加力）' : ''}</button>`).join('')}</div>
+        <div class="amount-options amount-options-single"><button class="amount-option active" data-amount="${state.selectedBook.amount}">¥${state.selectedBook.amount.toLocaleString()}</button></div>
       </div>
       <div class="field"><label>护持留言（选填）</label><textarea id="pledge-message" placeholder="愿以此功德，庄严佛净土……"></textarea></div>
       <div class="payment-box"><div class="payment-line"><span>认捐经书</span><b>${state.selectedBook.title}</b></div><div class="payment-line"><span>页数 × 单价</span><b>${state.selectedBook.pages}页 × ¥${PER_PAGE_PRICE}</b></div><div class="payment-line"><span>支付方式</span><b>微信支付 ›</b></div><div class="payment-line payment-total"><span>合计</span><strong>¥${state.amount.toLocaleString()}</strong></div></div>`;
@@ -1257,6 +1618,13 @@ function nextPledge() {
   }
   if (state.pledgeStep === 1) {
     if (!state.signature) return showToast('请先完成电子签名');
+    const country = document.querySelector('#region-country')?.value;
+    const province = document.querySelector('#region-province')?.value;
+    const city = document.querySelector('#region-city')?.value;
+    if (!country) return showToast('请选择常住地区·国别');
+    if (!province) return showToast('请选择常住地区·省份');
+    if (!city) return showToast('请选择常住地区·城市');
+    state.region = { country, province, city };
     if (!document.querySelector('#agree')?.checked) return showToast('请确认接受捐款协议');
   }
   if (state.pledgeStep === 3) {
@@ -1278,15 +1646,15 @@ function nextPledge() {
     const signedName = state.pledgeUseRealName ? displayName : (displayName || '护法居士');
     const cert = { id: certId, book: state.selectedBook.title, amount: state.amount, bookId: state.selectedBook.id, volume: state.selectedBook.volume, date: formatDate2(), useRealName: state.pledgeUseRealName, showInLedger: state.pledgeShowInLedger, signedName };
     state.certificates.push(cert);
-    state.myDonations.push({ certId, book: state.selectedBook.title, amount: state.amount, bookId: state.selectedBook.id, volume: state.selectedBook.volume, date: formatDate2(), anonymous: isAnonymous });
+    state.myDonations.push({ certId, book: state.selectedBook.title, amount: state.amount, bookId: state.selectedBook.id, volume: state.selectedBook.volume, date: formatDate2(), anonymous: isAnonymous, payMethod: '微信支付', tradeNo: `TX${formatDate()}${String(state.certificates.length).padStart(4, '0')}` });
     state.points.unshift({ type: 'donation', title: `认捐《${state.selectedBook.title}》（${state.selectedBook.pages}页）`, amount: state.amount, date: formatDate2() });
     // 同步到该经书的功德簿：始终只保留一条记录（同一经书仅一位功德主）
     const finalName = existing ? existing.name : (isAnonymous ? '匿名功德主' : signedName);
     const finalDate = formatDate2();
     donors[bookId] = [{ name: finalName, amount: mergedAmount, date: finalDate, anonymous: existing ? existing.anonymous : isAnonymous, realName: existing ? existing.realName : state.pledgeUseRealName }];
-    // 公开功德簿：同经只保留一行
+    // 公开募缘录：同经只保留一行
     const idx = donations.findIndex(d => d.book === state.selectedBook.title);
-    const donationRow = { name: finalName, book: state.selectedBook.title, amount: mergedAmount, date: finalDate };
+    const donationRow = { name: finalName, book: state.selectedBook.title, bookId: state.selectedBook.id, amount: mergedAmount, date: finalDate };
     if (idx >= 0) donations[idx] = donationRow; else donations.unshift(donationRow);
   }
   state.pledgeStep += 1;
@@ -1313,7 +1681,7 @@ function certificateHtml(certificate = {}) {
   const book = certificate.book || state.selectedBook?.title || '新修嘉兴大藏经';
   const amount = certificate.amount || state.amount;
   const name = state.user?.name || '莲心居士';
-  return `<div class="certificate"><img class="logo" src="assets/blue-lotus.png" alt="蓝色莲花"><h3>修藏荣誉证书</h3><p>兹敬谢 <b>${name}</b><br>发心护持《${book}》<br>护持金额 ¥${amount.toLocaleString()}</p><small>证书编号：${id}</small>${qrHtml()}</div>`;
+  return `<div class="certificate"><img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面"><h3>修藏荣誉证书</h3><p>兹敬谢 <b>${name}</b><br>发心护持《${book}》<br>护持金额 ¥${amount.toLocaleString()}</p><small>证书编号：${id}</small>${qrHtml()}</div>`;
 }
 
 function qrHtml() {
@@ -1328,8 +1696,17 @@ function openLogin() {
     const name = document.querySelector('#name').value.trim() || '居士';
     state.loggedIn = true;
     state.user = { name, phone, code: `GDZ-20260812-${String(286 + state.myDonations.length).padStart(4, '0')}` };
-    closeOverlay(); showToast('登录成功'); render();
+    const next = state._loginNext;
+    state._loginNext = null;
+    closeOverlay(); showToast('登录成功');
+    if (typeof next === 'function') { next(); } else { render(); }
   });
+}
+
+// 弹登录，登录成功后执行 callback
+function showLoginThen(callback) {
+  state._loginNext = callback;
+  openLogin();
 }
 
 /* ========== 功德主中心各模块 ========== */
@@ -1441,9 +1818,21 @@ function openConsult() {
 }
 
 function inscriptionsHtml() {
-  return `<article class="card quote-card"><div class="quote-text">新修嘉兴大藏经</div><div class="quote-sign"><span>恭请光泉大和尚</span><span>横幅墨宝 · 征集中</span></div></article>
-  <article class="card quote-card"><div class="quote-text" style="writing-mode:vertical-rl;margin:auto;width:100%;height:210px">续佛慧命<br>法宝长存</div><div class="quote-sign"><span>大德题词 · 原型展示位</span><span>竖幅</span></div></article>
-  <div class="notice">题词内容为原型示意，正式上线以项目组获授权的墨宝扫描件、题词释义及来源说明为准。</div>`;
+  return `<div class="inscription-grid-large">
+      <article class="card quote-card">
+        <div class="inscription-img-large"><img src="assets/inscription-1-yicheng-publish.png" alt="一诚大和尚为《嘉兴藏》出版题词"></div>
+        <div class="inscription-info"><strong>一诚大和尚</strong><small>中国佛教协会会长 · 为《嘉兴藏》出版题词</small></div>
+      </article>
+      <article class="card quote-card">
+        <div class="inscription-img-large"><img src="assets/inscription-2-yicheng-first.png" alt="一诚大和尚为《嘉兴藏》初版题词"></div>
+        <div class="inscription-info"><strong>一诚大和尚</strong><small>中国佛教协会会长 · 为《嘉兴藏》初版题词</small></div>
+      </article>
+      <article class="card quote-card">
+        <div class="inscription-img-large"><img src="assets/inscription-3-benhuan.jpg" alt="本焕大和尚为重辑《嘉兴藏》题字"></div>
+        <div class="inscription-info"><strong>本焕大和尚</strong><small>为重辑《嘉兴藏》题字</small></div>
+      </article>
+    </div>
+    <div class="notice">题词内容为大德墨宝扫描件，正式上线以项目组获授权的题词释义及来源说明为准。</div>`;
 }
 
 function openInfo(title, html) {
@@ -1464,6 +1853,20 @@ function bindOverlayBase() {
 }
 
 function closeOverlay() { overlayRoot.innerHTML = ''; }
+
+/* ========== 图片放大查看 ========== */
+function openZoom(src, caption) {
+  state.zoom = { src, caption: caption || '' };
+  overlayRoot.innerHTML = `<div class="zoom-overlay" data-zoom-close>
+      <button class="zoom-close" data-zoom-close aria-label="关闭">×</button>
+      <figure class="zoom-stage">
+        <img class="zoom-img" src="${src}" alt="${caption || ''}">
+        ${caption ? `<figcaption class="zoom-cap">${caption}</figcaption>` : ''}
+      </figure>
+    </div>`;
+  overlayRoot.querySelectorAll('[data-zoom-close]').forEach(el => el.addEventListener('click', closeZoom));
+}
+function closeZoom() { state.zoom = null; overlayRoot.innerHTML = ''; }
 
 let toastTimer;
 function showToast(message) {
