@@ -1,0 +1,18 @@
+=== 普通用户"我的"页 menu 区按钮 ===
+Traceback (most recent call last):
+  File "d:\QCTC\xiuzang\test_changes.py", line 73, in <module>
+    asyncio.run(main())
+    ~~~~~~~~~~~^^^^^^^^
+  File "D:\Anaconda\Lib\asyncio\runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "D:\Anaconda\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "D:\Anaconda\Lib\asyncio\base_events.py", line 725, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "d:\QCTC\xiuzang\test_changes.py", line 36, in main
+    print(f'   - {m}')
+    ~~~~~^^^^^^^^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\u203a' in position 12: illegal multibyte sequence

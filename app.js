@@ -1,4 +1,4 @@
-/* 新修嘉兴大藏经 · 交互原型（修正版）
+/* 新修嘉兴藏 · 交互原型（修正版）
  * 修正要点：
  *  1) 4 Tab：首页 / 经目 / 公开 / 我的
  *  2) 经目下二级切换：阅藏指南 / 经书目录
@@ -9,7 +9,7 @@
  *  7) 开屏页：进入小程序前的精美启动页
  *  8) 每部经书带 stage（阶段）字段，可预览封面 / 目录 / 一页正文
  *  9) 认捐金额 = 页数 × 200 元（修一页费用固定 200 元）
- * 10) 小程序名称改为"新修嘉兴大藏经"
+ * 10) 小程序名称改为"新修嘉兴藏"
  */
 
 const STAGES = [
@@ -20,6 +20,25 @@ const STAGES = [
 ];
 
 const PER_PAGE_PRICE = 200;
+
+// 收款账户占位（演示阶段先用 ********* 代替，正式版本会替换为实际对公账户）
+const PAYMENT_ACCOUNT = '*********';
+
+// 席位锁定天数（点击认捐后锁定 N 天内需上传凭证，否则自动释放）
+const LOCK_DAYS = 7;
+
+// 管理员账号（用于统一管理赠书情况 + 上传凭证）
+const ADMIN_ACCOUNT = { username: 'admin', password: 'admin123', displayName: '管理员' };
+
+// 一名用户同时只能认捐一部经书（含进行中 + 已完成）
+const MAX_PLEDGES_PER_USER = 1;
+
+// 赠送服务 3 项（完成认捐后发放）
+const GIFT_TYPES = {
+  guide:  { code: 'guide',  name: '嘉兴藏阅藏指南（电子版）', icon: '📘' },
+  plaque: { code: 'plaque', name: '牌记',                    icon: '🪶' },
+  pray:   { code: 'pray',   name: '三德弘法中心祈福法会',    icon: '🪷' }
+};
 
 // 常住地区选项（认捐流程第 1 步使用）
 const REGION_COUNTRIES = ['中国大陆', '中国香港', '中国澳门', '中国台湾', '新加坡', '马来西亚', '美国', '加拿大', '澳大利亚', '日本', '韩国', '英国', '法国', '德国', '其他'];
@@ -432,6 +451,33 @@ const donations = [
   { name: '陈居士', book: '憨山老人梦游集', bookId: 'JX-2278', amount: 220000, date: '2026-08-09' }
 ];
 
+// 认捐席位表：key 为 bookId；同一部经书允许多个锁定席位排队
+// 锁定期间 receipt 为 null；上传凭证后 receipt.verified = true 即视为认捐完成
+const seats = {
+  'JX-0047': [
+    {
+      seatId: 'SEAT-20260906-001',
+      bookId: 'JX-0047',
+      userName: '净莲', userPhone: '13800138001',
+      amount: 42000,
+      lockedAt: '2026-09-06T10:00:00',
+      expiresAt: '2026-09-13T23:59:59',  // 已过期（将在 cleanExpiredSeats 中清理）
+      receipt: null
+    }
+  ],
+  'JX-0528': [
+    {
+      seatId: 'SEAT-20260910-001',
+      bookId: 'JX-0528',
+      userName: '善护', userPhone: '13800138002',
+      amount: 72000,
+      lockedAt: '2026-09-10T09:00:00',
+      expiresAt: '2026-09-17T23:59:59',
+      receipt: null
+    }
+  ]
+};
+
 const state = {
   page: 'home',
   splash: true,
@@ -445,6 +491,9 @@ const state = {
   transparentTab: '进度',
   loggedIn: false,
   user: null,
+  // 管理员登录态（独立于普通用户；admin 与 普通用户互斥）
+  adminLoggedIn: false,
+  adminUser: null,
   selectedBook: null,
   pledgeStep: 0,
   amount: 0,
@@ -454,6 +503,8 @@ const state = {
   invites: { count: 0, friendDonation: 0 },
   myDonations: [],
   consultations: [],
+  // 我的赠品（完成认捐后由管理员触发发放的 3 项服务）
+  myGifts: null,  // { guide:{issued,code}, plaque:{issued,type,content}, pray:{issued,code,date} } 或 null
   // 认捐展示偏好：是否使用真实姓名、是否同意展示在功德簿
   pledgeUseRealName: true,
   pledgeShowInLedger: true,
@@ -461,6 +512,12 @@ const state = {
   region: { country: '', province: '', city: '' },
   // 经书目录批量认捐清单（元素为 bookId）。打开经目时清空；选中项在子类型与经书卡片上同步高亮
   cart: [],
+  // 当前用户已锁定的认捐席位（来自 seats 中 phone 与 state.user.phone 匹配且未过期的项）
+  mySeats: [],
+  // 最近一次认捐流程锁定的席位（用于"席位已锁定"成功页）
+  _lastLockedSeat: null,
+  _lastLockedSeats: null,
+  _demoSeatsInited: false,
   // 子类型折叠/展开状态（key 为子类型标识；不存在的 key 视为默认展开）
   subOpen: {},
   // 当前演示用户已默认登录为「居士」，便于展示已捐赠的经书
@@ -484,7 +541,7 @@ window.addEventListener('resize', fitDeviceCanvas);
 fitDeviceCanvas();
 
 function statusBar() {
-  return `<div class="statusbar"><span>9:41</span><span>新修嘉兴大藏经 · 原型</span><span>5G&nbsp;&nbsp;▰</span></div>`;
+  return `<div class="statusbar"><span>9:41</span><span>新修嘉兴藏 · 原型</span><span>5G&nbsp;&nbsp;▰</span></div>`;
 }
 
 function setPage(page) {
@@ -495,6 +552,10 @@ function setPage(page) {
 }
 
 function render() {
+  cleanExpiredSeats();
+  // demo 数据初始化（幂等）：让「经目 → 认捐中」能立即看到 demo 占座，无需先进入「我的」
+  ensureDemoMySeats();
+  if (state.loggedIn) refreshMySeats();
   if (state.splash) { app.innerHTML = renderSplash(); bindSplash(); return; }
   if (state.preview) { app.innerHTML = ''; renderPreview(); return; }
   // 进入小程序默认未登录；登录由用户主动触发（首页/经目/公开均可浏览，但不展示个人数据）
@@ -504,54 +565,55 @@ function render() {
 }
 
 // 为演示用的「居士」准备默认的认捐记录：认捐了《大方廣佛華嚴經》全部 718 筒页 / ¥143,600
+// 为演示用的「居士」准备默认的认捐记录：
+// 需求：用户登录后的初始状态应该是「我的认捐」空 + 「认捐中」1 本（占座中）。
+// 「我的认捐」的具体记录由管理员上传凭证后通过 finalizeSeat 落账生成。
+// 因此 demo 阶段不再预先 push 一笔"已完成"的 myDonations，避免与"每位用户同时仅可认捐一部"的业务规则冲突。
 function ensureDemoMyDonation() {
   if (state._demoInitialized) return;
   state._demoInitialized = true;
-  const book = books.find(b => b.id === 'JX-0012');
-  if (!book) return;
-  const certId = 'CERT-20260715-001';
-  state.myDonations.push({
-    certId,
-    book: book.title,
-    amount: 143600,
-    bookId: book.id,
-    volume: book.volume,
-    pages: book.pages,
-    date: '2026-07-15',
-    anonymous: false,
-    progress: book.progress,
-    payMethod: '微信支付',
-    tradeNo: 'TX2026071500001'
-  });
-  state.certificates.push({
-    id: certId,
-    book: book.title,
-    amount: 143600,
-    bookId: book.id,
-    volume: book.volume,
-    date: '2026-07-15',
-    useRealName: true,
-    showInLedger: true,
-    signedName: '居士'
-  });
-  state.points.unshift({
-    type: 'donation',
-    title: `认捐《${book.title}》（${book.pages}筒页）`,
-    amount: 143600,
-    date: '2026-07-15'
-  });
+}
+
+// 为演示用户「居士」预填 2 个锁定席位：
+//  1) JX-0001（佛说菩萨十住经）：刚锁定 6 天前，还剩 1 天到期 → 触发到期通知横幅
+// 注意：每位用户同时仅可认捐一部经书，demo 仅初始化一本正在认捐中的经书；
+// 管理员上传凭证后，`getBookSeatStatus` 会切换为「已认捐」，
+// 用户角色的"认捐中"列表随之清空、"已认捐"列表多 1 本，与业务预期一致。
+function ensureDemoMySeats() {
+  if (state._demoSeatsInited) return;
+  state._demoSeatsInited = true;
+
+  // 仅演示一本即将到期的认捐中经书
+  const book1 = books.find(b => b.id === 'JX-0001');
+  if (book1) {
+    const lockedAt = new Date(Date.now() - 6 * 86400000);            // 6 天前锁定
+    const expiresAt = new Date(lockedAt.getTime() + LOCK_DAYS * 86400000);
+    const seat = {
+      seatId: 'SEAT-20260907-001',
+      bookId: book1.id,
+      userName: '居士', userPhone: '13800138000',
+      amount: book1.amount,
+      lockedAt: lockedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      receipt: null
+    };
+    seats[book1.id] = seats[book1.id] || [];
+    seats[book1.id].push(seat);
+    state.mySeats = state.mySeats || [];
+    state.mySeats.push(seat);
+  }
 }
 
 /* ========== 开屏页 ========== */
 function renderSplash() {
-  return `<div class="splash" role="dialog" aria-label="新修嘉兴大藏经小程序开屏">
+  return `<div class="splash" role="dialog" aria-label="新修嘉兴藏小程序开屏">
     <div class="splash-top">
-      <span>新修嘉兴大藏经 · 大众护持平台</span>
+      <span>新修嘉兴藏 · 大众护持平台</span>
       <span class="splash-stamp">辛卯 · 2026</span>
     </div>
     <img class="splash-lotus" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面">
     <div class="splash-mid">
-      <h1>新修嘉兴大藏经</h1>
+      <h1>新修嘉兴藏</h1>
       <div class="splash-en">XIN XIU JIA XING DA ZANG JING</div>
       <div class="splash-divider"></div>
       <p class="splash-sub">接续浙地径山、嘉兴刻藏文脉<br>复原完整古藏 · 增补文献 · 传续法宝</p>
@@ -582,10 +644,11 @@ function renderHome() {
   const todoCount = books.filter(b => b.stage === 'todo').length;
   return `<div class="page">
     ${statusBar()}
+    ${renderExpiringNotice()}
     <section class="hero">
       <div class="brandline">
         <img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面">
-        <div><h1>新修嘉兴大藏经</h1><p>新修嘉兴大藏经 · 大众护持平台</p></div>
+        <div><h1>新修嘉兴藏</h1><p>新修嘉兴藏 · 大众护持平台</p></div>
       </div>
       <p class="hero-copy">为正本清源、弘法利生，由《嘉兴藏》（重辑·2008版）原班团队接续，引入 AI 与专家团队，重新修复、重新编序、重新增补。</p>
       <div class="hero-actions">
@@ -601,7 +664,7 @@ function renderHome() {
     <section class="intro-section">
       <div class="section-head"><div><h2>项目缘起</h2><p>一场跨越时代的文化传承工程</p></div></div>
       <div class="intro-card">
-        <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修嘉兴大藏经》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
+        <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修嘉兴藏》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
       </div>
     </section>
 
@@ -735,12 +798,14 @@ function renderCatalog() {
   const view = state.catalogView;
   const filtered = books.filter(book => {
     const hasDonor = !!(donors[book.id] && donors[book.id].length > 0);
-    // 三个 tab 视图：全部 / 可认捐（仅未认捐）/ 已认捐（含已圆满）
+    // 四个 tab 视图：全部 / 可认捐（仅未认捐）/ 认捐中（按当前席位状态动态判定）/ 已认捐
     let viewPass;
     if (view === '可认捐') {
-      viewPass = book.status === '可认捐' && !hasDonor;
+      viewPass = book.status === '可认捐' && !hasDonor && filterByView(book, '可认捐');
+    } else if (view === '认捐中') {
+      viewPass = filterByView(book, '认捐中');
     } else if (view === '已认捐') {
-      viewPass = hasDonor;
+      viewPass = hasDonor || filterByView(book, '已认捐');
     } else {
       viewPass = true;
     }
@@ -770,7 +835,8 @@ function renderCatalog() {
       </div>
       <div class="catalog-view" role="tablist" aria-label="认捐视图">
         <button data-catalog-view="全部" class="${view === '全部' ? 'active' : ''}">全部 <em>3,433</em></button>
-        <button data-catalog-view="可认捐" class="${view === '可认捐' ? 'active' : ''}">可认捐 <em>3,426</em></button>
+        <button data-catalog-view="可认捐" class="${view === '可认捐' ? 'active' : ''}">可认捐 <em>3,425</em></button>
+        <button data-catalog-view="认捐中" class="${view === '认捐中' ? 'active' : ''}">认捐中 <em>${Object.values(seats).reduce((s, arr) => s + arr.filter(x => !x.receipt?.verified).length, 0)}</em></button>
         <button data-catalog-view="已认捐" class="${view === '已认捐' ? 'active' : ''}">已认捐 <em>7</em></button>
       </div>
       <label class="search" style="margin-top:12px"><span>⌕</span><input id="catalog-search" value="${state.query}" placeholder="搜索经名、编号或关键词" aria-label="搜索经书"></label>
@@ -783,15 +849,183 @@ function renderCatalog() {
 }
 
 function filterByView(book, view) {
-  const hasDonor = !!(donors[book.id] && donors[book.id].length > 0);
-  if (view === '可认捐') return book.status === '可认捐' && !hasDonor;
-  if (view === '已认捐') return hasDonor;
+  if (view === '可认捐') {
+    const hasDonor = !!(donors[book.id] && donors[book.id].length > 0);
+    return book.status === '可认捐' && !hasDonor && getBookSeatStatus(book) === '可认捐';
+  }
+  if (view === '认捐中') return getBookSeatStatus(book) === '认捐中';
+  if (view === '已认捐') return getBookSeatStatus(book) === '已认捐';
   return true;
+}
+
+// ============ 席位（seat）辅助函数 ============
+// 根据 bookId + 当前时间判定经书的认捐状态：
+//  - 已认捐：有任一 seat 已上传凭证且 verified
+//  - 认捐中：有未过期的活跃 seat（未传凭证）
+//  - 否则回退到 books 静态 status
+function getBookSeatStatus(book) {
+  const list = seats[book.id] || [];
+  const now = Date.now();
+  if (list.some(s => s.receipt && s.receipt.verified)) return '已认捐';
+  if (list.some(s => !s.receipt?.verified && new Date(s.expiresAt).getTime() > now)) return '认捐中';
+  return book.status;
+}
+
+// 获取某经书当前活跃（未过期、未完成）的席位
+function getActiveSeat(bookId) {
+  const list = seats[bookId] || [];
+  const now = Date.now();
+  return list.find(s => !s.receipt?.verified && new Date(s.expiresAt).getTime() > now) || null;
+}
+
+// 清理全局 seats 与 state.mySeats 中已过期且未传凭证的席位
+function cleanExpiredSeats() {
+  const now = Date.now();
+  Object.keys(seats).forEach(bookId => {
+    const before = seats[bookId].length;
+    seats[bookId] = seats[bookId].filter(s => s.receipt?.verified || new Date(s.expiresAt).getTime() > now);
+    if (!seats[bookId].length) delete seats[bookId];
+    if (before !== (seats[bookId]?.length || 0)) {
+      state.mySeats = (state.mySeats || []).filter(x => (seats[x.bookId] || []).some(s => s.seatId === x.seatId));
+    }
+  });
+}
+
+// 即将到期（剩余 ≤ 24h）且尚未上传凭证的席位
+// 获取当前用户自己即将到期的席位（仅限当前登录用户，最多 1 部）
+function getMyExpiringSeats() {
+  if (!state.user) return [];
+  const now = Date.now();
+  const oneDay = 86400000;
+  const out = [];
+  (state.mySeats || []).forEach(s => {
+    if (s.receipt?.verified) return;
+    const remain = new Date(s.expiresAt).getTime() - now;
+    if (remain > 0 && remain <= oneDay) {
+      out.push({ ...s, _bookId: s.bookId, _remainMs: remain });
+    }
+  });
+  return out;
+}
+
+function getExpiringSoonSeats() {
+  const now = Date.now();
+  const oneDay = 86400000;
+  const out = [];
+  Object.keys(seats).forEach(bookId => {
+    (seats[bookId] || []).forEach(s => {
+      if (s.receipt?.verified) return;
+      const remain = new Date(s.expiresAt).getTime() - now;
+      if (remain > 0 && remain <= oneDay) {
+        out.push({ ...s, _bookId: bookId, _remainMs: remain });
+      }
+    });
+  });
+  return out;
+}
+
+// 当前用户（按手机号匹配）的未过期、未完成席位
+function refreshMySeats() {
+  state.mySeats = getMySeats();
+  return state.mySeats;
+}
+
+function getMySeats() {
+  if (!state.loggedIn || !state.user) return [];
+  const now = Date.now();
+  const out = [];
+  Object.keys(seats).forEach(bookId => {
+    (seats[bookId] || []).forEach(s => {
+      if (s.userPhone === state.user.phone && (!s.receipt || !s.receipt.verified) && new Date(s.expiresAt).getTime() > now) {
+        out.push(s);
+      }
+    });
+  });
+  return out;
+}
+
+// 通过 seatId 在全局 seats 中查找
+function findSeatById(seatId) {
+  for (const bookId in seats) {
+    const found = (seats[bookId] || []).find(s => s.seatId === seatId);
+    if (found) return found;
+  }
+  return null;
+}
+
+// 当前用户是否还能再认捐（同一用户最多 1 部）
+// 判定条件：seats 中存在任何属于当前用户的"未释放、未完成"席位 → 不允许
+// 已完成认捐（receipt.verified）也算已占用，直到超时释放才可再次认捐
+function canUserPledgeAnother() {
+  if (!state.user) return true;  // 未登录态放行（登录前会强制登录）
+  return !getUserActivePledge();
+}
+
+// 返回当前用户已锁定的认捐（任一状态：进行中 / 已完成 / 已被释放前的座位）
+function getUserActivePledge() {
+  if (!state.user) return null;
+  for (const bookId in seats) {
+    const list = seats[bookId] || [];
+    for (const s of list) {
+      if (s.userPhone === state.user.phone) {
+        // 仅"进行中或已完成"占名额；"超时已被释放"的（lockReleased=true）不占
+        if (s._released) continue;
+        return s;
+      }
+    }
+  }
+  return null;
+}
+
+// 凭证通过 / 直接生效后的落账动作：
+//  生成证书 + 入积分 + 同步 donors/donations + 清理 mySeats
+function finalizeSeat(seat) {
+  const book = books.find(b => b.id === seat.bookId);
+  if (!book) return;
+  const certId = `CERT-${formatDate()}-${String(state.certificates.length + 1).padStart(3, '0')}`;
+  const date = formatDate2();
+  state.certificates = state.certificates || [];
+  state.certificates.push({
+    id: certId, book: book.title, amount: seat.amount,
+    bookId: book.id, volume: book.volume, date,
+    useRealName: state.pledgeUseRealName ?? true,
+    showInLedger: state.pledgeShowInLedger ?? true,
+    signedName: seat.userName
+  });
+  state.myDonations.push({
+    certId, seatId: seat.seatId, book: book.title, amount: seat.amount, bookId: book.id,
+    volume: book.volume, date,
+    payMethod: '银行转账',
+    tradeNo: `TX${formatDate()}${String(state.certificates.length).padStart(4, '0')}`,
+    receipt: seat.receipt || null
+  });
+  state.points.unshift({
+    type: 'donation',
+    title: `认捐《${book.title}》（${book.pages}页）`,
+    amount: seat.amount, date
+  });
+  // 同一经书只保留一条认捐记录
+  const existing = (donors[book.id] && donors[book.id][0]) || null;
+  const mergedAmount = existing ? existing.amount + seat.amount : seat.amount;
+  donors[book.id] = [{
+    name: seat.userName, amount: mergedAmount, date,
+    anonymous: false, realName: true
+  }];
+  const idx = donations.findIndex(d => d.bookId === book.id);
+  const row = { name: seat.userName, book: book.title, bookId: book.id, amount: mergedAmount, date };
+  if (idx >= 0) donations[idx] = row; else donations.unshift(row);
+  state.mySeats = (state.mySeats || []).filter(x => x.seatId !== seat.seatId);
+}
+
+// 格式化剩余天数（向上取整，最少 0）
+function seatRemainDays(seat) {
+  if (!seat) return 0;
+  return Math.max(0, Math.ceil((new Date(seat.expiresAt).getTime() - Date.now()) / 86400000));
 }
 
 // 经书目录列表渲染：按部类 → 子类型 分组，可折叠展开
 function renderCatalogList(filtered, view) {
-  // 已认捐 / 可认捐：维持原扁平列表（每条经书自身就是认捐单位）
+  // 已认捐 / 可认捐 / 认捐中：维持原扁平列表（每条经书自身就是认捐单位）
   if (view === '可认捐') {
     const emptyMsg = '目前没有可认捐的经书，请切换到「全部」或「已认捐」查看';
     return `<div id="catalog-list" class="book-list" style="padding:12px 16px 0">${filtered.length ? filtered.map(bookCard).join('') : `<div class="card empty">${emptyMsg}</div>`}</div>`;
@@ -799,6 +1033,9 @@ function renderCatalogList(filtered, view) {
   if (view === '已认捐') {
     const emptyMsg = '尚无已认捐的经书，欢迎前往「可认捐」认捐首部经书';
     return `<div id="catalog-list" class="book-list" style="padding:12px 16px 0">${filtered.length ? filtered.map(bookCard).join('') : `<div class="card empty">${emptyMsg}</div>`}</div>`;
+  }
+  if (view === '认捐中') {
+    return renderSeatList(filtered);
   }
 
   // 全部：按部类 → 子类型 分组（亦支持 catalogFilter 指定单个部类）
@@ -843,6 +1080,111 @@ function renderCatalogList(filtered, view) {
 }
 
 // 计算当前购物车合计金额（只统计"可认捐"状态的经书，防御性过滤）
+// 认捐中 tab 列表：按经/律/论/述四大部类分组，简单展示
+function renderSeatList(filtered) {
+  // 业务规则：每位用户同时仅可认捐一部经书。若用户已有"已认捐"记录，
+  // 则「认捐中」视图不应再展示该用户的任何锁定席位（其席位要么已 verified、要么未释放）。
+  // 对管理员模式不生效（管理员需要看到所有席位以便上传凭证）。
+  const seatBooks = (filtered || books.filter(b => getBookSeatStatus(b) === '认捐中'))
+    .filter(b => {
+      if (state.adminLoggedIn) return true;
+      if (!state.loggedIn || !state.user) return true;
+      // 若当前用户已存在 myDonations（已认捐记录），整条都不在自己的「认捐中」视图内
+      if (state.myDonations.length > 0) return false;
+      // 否则：座位中若有其他用户（phone 不匹配）的席位，隐藏；只保留自己或"无主"席位
+      const list = seats[b.id] || [];
+      return list.some(s => !s.userPhone || s.userPhone === state.user.phone);
+    });
+  if (!seatBooks.length) {
+    return `<div class="card empty" style="margin:14px 16px 0">当前没有正在锁定的认捐席位<br><small>前往「可认捐」选择经书认捐</small></div>`;
+  }
+  const groups = ['经藏', '律藏', '论藏', '述藏'].map(section => ({
+    section,
+    items: seatBooks.filter(b => b.section === section)
+  })).filter(g => g.items.length);
+
+  return `<section class="section" style="padding:12px 16px 0">
+    <div class="card" style="padding:14px;background:#fff8e8;border:1px solid #ead9b3;margin-bottom:12px">
+      <div style="font-size:12px;color:#7a5520;line-height:1.6">
+        <b>共 ${seatBooks.length} 部经书正在锁定认捐席位</b><br>
+        每部经书的认捐席位将保留 ${LOCK_DAYS} 天，期间请完成银行转账。普通用户<b>无需自行上传凭证</b>——管理员在银行账户收到您的汇款后，将上传收款凭证并确认认捐。
+      </div>
+    </div>
+    ${state.adminLoggedIn ? `<div class="admin-mode-banner"><span class="admb-icon">⚙</span><div><strong>管理员模式</strong><br><small>您可以为任意席位上传收款凭证并完成认捐。</small></div><button class="text-link" data-action="logout">退出</button></div>` : ''}
+    ${groups.map(g => `
+      <div class="card seat-group">
+        <div class="seat-group-head"><strong>${g.section}</strong><span>${g.items.length} 部锁定中</span></div>
+        ${g.items.map(b => {
+          const seat = getActiveSeat(b.id);
+          // 防御：若 seat 为 null（席位已过期但 view 过滤还残留），跳过该条
+          if (!seat) return '';
+          const remain = seatRemainDays(seat);
+          const isUrgent = remain <= 1;
+          const lockedAtShort = seat.lockedAt.slice(0, 10);
+          // 按钮逻辑：
+          //   · 管理员登录 → 任何席位均可「上传凭证」（不限本人；其他人的席位也能传）
+          //   · 普通用户本席位、未上传凭证 → 「查看凭证」（只读，未上传则提示等待）
+          //   · 普通用户本席位、已上传凭证 → 「查看凭证」（只读，展示凭证信息）
+          //   · 他人席位 → 「查看」
+          const isMine = state.loggedIn && state.user && state.user.phone === seat.userPhone;
+          let actionBtn;
+          if (state.adminLoggedIn) {
+            // 管理员：不论哪个席位都能上传/查看凭证
+            if (seat.receipt?.verified) {
+              actionBtn = `<button class="btn btn-ghost" data-action="view-receipt" data-stop data-seat="${seat.seatId}">查看凭证</button>`;
+            } else {
+              actionBtn = `<button class="btn btn-primary ${isUrgent ? 'btn-urgent' : ''}" data-action="upload-receipt-admin" data-stop data-seat="${seat.seatId}">${isUrgent ? '⚠️ 上传凭证' : '上传凭证'}</button>`;
+            }
+          } else if (isMine) {
+            actionBtn = `<button class="btn btn-ghost" data-action="view-receipt" data-stop data-seat="${seat.seatId}">查看凭证</button>`;
+          } else {
+            actionBtn = `<button class="btn btn-ghost" data-action="open-book" data-stop data-book="${b.id}">查看</button>`;
+          }
+          // 管理员模式下，每行附加管理员徽章
+          const adminTag = state.adminLoggedIn ? `<small class="admin-tag">${seat.userName || '未知'}</small>` : '';
+          return `
+            <div class="seat-row" data-book="${b.id}">
+              <div class="seat-row-info">
+                <strong>${b.title}</strong>
+                <small>${bookCode(b)} · ${b.volume} · ${b.section}</small>
+                <small class="lock-meta">锁定于 ${lockedAtShort}${isMine ? ` · ${seat.userName}` : ` · ${seat.userName}`}${adminTag ? ` · ` : ''}${adminTag}</small>
+              </div>
+              <div class="seat-row-meta">
+                <span class="badge gold">认捐中</span>
+                <b>¥${b.amount.toLocaleString()}</b>
+                <small class="${isUrgent ? 'urgent' : ''}">剩余 ${remain} 天${isUrgent ? ' · 即将到期' : ''}</small>
+              </div>
+              <div class="seat-row-action">
+                ${actionBtn}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `).join('')}
+  </section>`;
+}
+
+// 即将到期提示横幅（用于首页 / 募缘 / 我的 顶部）
+function renderExpiringNotice() {
+  // 普通用户：只看自己即将到期的席位（最多 1 部）；管理员：全局视角
+  const list = (state.adminLoggedIn || !state.loggedIn) ? getExpiringSoonSeats() : getMyExpiringSeats();
+  if (!list.length) return '';
+  const summary = list.slice(0, 3).map(s => {
+    const book = books.find(b => b.id === s._bookId);
+    const hours = Math.max(1, Math.ceil(s._remainMs / 3600000));
+    return `${book?.title || ''} · 剩 ${hours} 小时`;
+  }).join(' / ');
+  return `<div class="expiring-notice" role="alert" data-go="my-seats">
+    <span class="en-icon">⏰</span>
+    <div class="en-body">
+      <strong>${list.length} 部经书认捐席位即将到期</strong>
+      <small>${summary}${list.length > 3 ? ' …' : ''}</small>
+    </div>
+    <button class="text-link">查看 ›</button>
+  </div>`;
+}
+
 function cartSummary() {
   const ids = state.cart;
   const booksInCart = ids.map(id => books.find(b => b.id === id)).filter(Boolean);
@@ -871,7 +1213,7 @@ function renderGuide() {
     ${statusBar()}
     <header class="topbar"><span style="width:44px"></span><h1>阅藏指南</h1><span style="width:44px"></span></header>
     <section class="guide-hero">
-      <h2>新修嘉兴大藏经 · 阅藏指南</h2>
+      <h2>新修嘉兴藏 · 阅藏指南</h2>
       <p>嘉兴藏是明代方册本大藏经的代表。本次新修以故宫珍藏本为底本，邀大众"以阅入藏、以捐护藏"。</p>
     </section>
     <section class="section">
@@ -896,6 +1238,11 @@ function renderGuide() {
   </div>`;
 }
 
+// 经书编号显示：去掉 JX- 前缀，统一显示 4 位数字（如 0001 / 0199）
+function bookCode(book) {
+  return String(book.id).replace(/^JX-/, '').padStart(4, '0');
+}
+
 function bookCard(book) {
   // 原则：一部经书一旦有认捐者，状态显示为「已认捐」，不再标注「可认捐」
   const hasDonor = (donors[book.id] && donors[book.id].length > 0);
@@ -914,7 +1261,7 @@ function bookCard(book) {
     <div class="book-meta">
       <div class="book-meta-info">
         <span class="book-title">${book.title}</span>
-        <span class="book-code">${book.id} · ${book.section} · ${book.volume}</span>
+        <span class="book-code">${bookCode(book)} · ${book.section} · ${book.volume}</span>
         ${subTag}
       </div>
       <div class="book-meta-side">
@@ -943,14 +1290,11 @@ function renderTransparent() {
   const content = t === '进度' ? myProgressContent() : t === '资金' ? myFundContent() : ledgerContent();
   return `<div class="page">
     ${statusBar()}
+    ${renderExpiringNotice()}
     <header class="topbar"><span style="width:44px"></span><h1>我的募缘</h1><button class="icon-btn" data-action="verify" aria-label="证书验证">⌕</button></header>
     <section class="section" style="padding-top:14px"><div class="segment">${['进度','资金','募缘录'].map(tab => `<button class="${state.transparentTab === tab ? 'active' : ''}" data-transparent="${tab}">${tab}</button>`).join('')}</div></section>
     <section class="section" style="padding-top:14px">${content}</section>
     ${t === '进度' ? `
-    <section class="section">
-      <div class="section-head"><div><h2>证书在线认证</h2><p>输入证书编号验证真伪</p></div></div>
-      <button class="btn btn-block" data-action="verify">立即验证</button>
-    </section>
     <section class="section" style="padding-bottom:22px"><button class="btn btn-block btn-ghost" data-go="consult">修藏专项咨询</button></section>` : ''}
   </div>`;
 }
@@ -974,7 +1318,7 @@ function myProgressContent() {
     return `<article class="card donation-progress" data-book="${book.id}">
       <div class="donation-progress-head"><strong>${book.title}</strong><span class="badge ${progress === 100 ? 'gray' : 'gold'}">${progress === 100 ? '已圆满' : '修藏中'}</span></div>
       <div class="donation-progress-meta">
-        <span>${book.id} · ${book.section || '经藏'} · ${book.volume}</span>
+        <span>${bookCode(book)} · ${book.section || '经藏'} · ${book.volume}</span>
         <span class="cert-tag">证书 ${book.donation.certId}</span>
       </div>
       <div class="donation-progress-stage ${stageInfo.code}">
@@ -1003,7 +1347,7 @@ function myFundContent() {
     const tradeNo = book.donation.tradeNo || `TX${(book.donation.date || '').replace(/-/g, '')}0001`;
     const volume = book.volume || (books.find(b => b.id === book.id)?.volume) || '';
     return `<article class="card fund-book">
-      <div class="fund-book-head"><strong>${book.title}</strong><span class="badge">${book.id}</span></div>
+      <div class="fund-book-head"><strong>${book.title}</strong><span class="badge">${bookCode(book)}</span></div>
       <div class="fund-book-info">
         <div><span>经书名称</span><b>${book.title}</b></div>
         <div><span>卷数</span><b>${volume}</b></div>
@@ -1053,11 +1397,86 @@ function ledgerRow(item) {
 }
 
 /* ========== 我的（功德主中心，已移除赠书和藏经编辑入口） ========== */
-function renderProfile() {
-  if (!state.loggedIn) return renderProfileGuest();
-  const totalPoints = state.myDonations.reduce((s, d) => s + d.amount, 0) + Math.round(state.invites.friendDonation * 0.5);
+function renderProfileAdmin() {
+  // 管理员登录态下的"我的"页
+  const pendingCount = countPendingSeats();
   return `<div class="page">
     ${statusBar()}
+    <section class="profile-head admin-profile-head">
+      <div class="profile-user">
+        <div class="profile-avatar admin-avatar"><svg class="profile-avatar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1l3 6 6 1-4.5 4.5L18 19l-6-3-6 3 1.5-6.5L3 8l6-1z" fill="currentColor"></path></svg></div>
+        <div><h2>${state.adminUser.name}</h2><p>${state.adminUser.username} · 统一管理赠书情况</p></div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:14px">
+      <div class="admin-mode-banner">
+        <span class="admb-icon">⚙</span>
+        <div><strong>当前为管理员模式</strong><br><small>您可以在【经目 → 认捐中】查看所有待确认席位并上传收款凭证。</small></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2>管理快链</h2></div></div>
+      <div class="quick-grid">
+        <button class="quick-item" data-action="go-pending-seats"><span class="quick-icon">票</span><span>待确认席位（${pendingCount}）</span></button>
+        <button class="quick-item" data-action="go-pending-seats"><span class="quick-icon">认</span><span>认捐中列表</span></button>
+        <button class="quick-item" data-action="switch-user"><span class="quick-icon">换</span><span>切换普通用户</span></button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2>操作指引</h2></div></div>
+      <div class="card notice">
+        <b>管理员操作流程：</b><br>
+        ① 在【经目 → 认捐中】查看所有待确认席位<br>
+        ② 点击席位行右侧「上传凭证」按钮<br>
+        ③ 上传银行收款截图，系统自动 OCR 识别<br>
+        ④ 核对无误后点击「确认无误，完成认捐」<br>
+        ⑤ 系统自动落账 + 发放 3 项赠品（阅藏指南 / 牌记 / 祈福法会）
+      </div>
+    </section>
+    <section class="section">
+      <button class="btn btn-block btn-logout" data-action="logout">退出登录</button>
+    </section>
+  </div>`;
+}
+
+// 统计当前还有效但未完成凭证上传的席位
+function countPendingSeats() {
+  let n = 0;
+  const now = Date.now();
+  for (const bookId in seats) {
+    (seats[bookId] || []).forEach(s => {
+      if (!s.receipt?.verified && new Date(s.expiresAt).getTime() > now && !s._released) n++;
+    });
+  }
+  return n;
+}
+
+function renderProfile() {
+  // 演示态已关闭：点击"进入小程序"后默认未登录，需用户主动登录或注册
+  // // ★ 演示态：仅在整个会话**第一次**进"我的"页时，自动以「居士」身份登录
+  // //   一旦用户主动退出过（_userEverLoggedOut = true），就不再自动登录
+  // //   这样管理员登录后不会被居士覆盖，用户退出后能正常进入登录页
+  // if (!state.loggedIn && !state.adminLoggedIn && state.demoUser && !state._userEverLoggedOut && !state._firstProfileVisitDone) {
+  //   state.loggedIn = true;
+  //   state.user = { ...state.demoUser };
+  //   state._firstProfileVisitDone = true;
+  // }
+  // 管理员模式：渲染"管理员专属我的页"（无需居士身份）
+  if (state.adminLoggedIn) return renderProfileAdmin();
+  if (!state.loggedIn) return renderProfileGuest();
+  // 初始化演示数据
+  ensureDemoMyDonation();
+  ensureDemoMySeats();
+  refreshMySeats();
+  const totalPoints = state.myDonations.reduce((s, d) => s + d.amount, 0) + Math.round(state.invites.friendDonation * 0.5);
+  const mySeatsHtml = state.mySeats.length ? renderMySeats() : '';
+  return `<div class="page">
+    ${statusBar()}
+    ${renderExpiringNotice()}
+    ${state.adminLoggedIn ? `<div class="admin-mode-banner" style="margin:14px 16px 0"><span class="admb-icon">⚙</span><div><strong>${state.adminUser.name}</strong><br><small>当前为管理员模式。可在【经目 → 认捐中】为任意席位上传收款凭证。</small></div><button class="text-link" data-action="logout">退出管理员</button></div>` : ''}
     <section class="profile-head">
       <div class="profile-user">
         <div class="profile-avatar profile-avatar-img"><svg class="profile-avatar-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"></circle><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="currentColor"></path></svg></div>
@@ -1069,12 +1488,14 @@ function renderProfile() {
         <div style="text-align:right"><span>本月购物倍率</span><strong>2×</strong></div>
       </div>
     </section>
+    ${mySeatsHtml}
     <section class="section">
       <div class="section-head"><div><h2>权益快链</h2></div></div>
       <div class="quick-grid">
         <button class="quick-item" data-action="points-detail"><span class="quick-icon">分</span><span>积分明细</span></button>
         <button class="quick-item" data-action="invite"><span class="quick-icon">荐</span><span>扫码推荐</span></button>
         <button class="quick-item" data-action="certificates"><span class="quick-icon">证</span><span>荣誉证书</span></button>
+        <button class="quick-item" data-action="my-gifts"><span class="quick-icon">礼</span><span>我的赠品</span></button>
         <button class="quick-item" data-action="my-donations"><span class="quick-icon">簿</span><span>我的功德</span></button>
       </div>
     </section>
@@ -1086,12 +1507,49 @@ function renderProfile() {
     </section>
     <section class="section">
       <div class="card menu">
-        <button class="menu-row" data-go="transparent"><span class="menu-icon">溯</span><span>资金与进度查询</span><small>公开透明 ›</small></button>
         <button class="menu-row" data-go="consult"><span class="menu-icon">问</span><span>专项咨询</span><small>›</small></button>
-        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴大藏经</span><small>›</small></button>
+        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴藏</span><small>›</small></button>
       </div>
     </section>
+    <section class="section">
+      <button class="btn btn-block btn-logout" data-action="logout">退出登录</button>
+    </section>
   </div>`;
+}
+
+// 「我的认捐中」模块
+function renderMySeats() {
+  return `<section class="section">
+    <div class="section-head">
+      <div><h2>我的认捐中</h2><p>锁定席位 ${LOCK_DAYS} 天内需上传凭证，逾期将自动释放</p></div>
+      <span class="badge gold">${state.mySeats.length} 个</span>
+    </div>
+    ${state.mySeats.map(seat => {
+      const book = books.find(b => b.id === seat.bookId);
+      const remain = seatRemainDays(seat);
+      const isUrgent = remain <= 1;
+      const expiresAtShort = seat.expiresAt.replace('T', ' ').slice(0, 16);
+      return `
+        <article class="card seat-mine">
+          <div class="seat-mine-head">
+            <strong>${book?.title || seat.bookId}</strong>
+            <span class="badge ${seat.receipt?.verified ? 'gray' : 'gold'}">${seat.receipt?.verified ? '已完成' : '认捐中'}</span>
+          </div>
+          <div class="seat-mine-info">
+            <div><span>应转金额</span><b class="payee-amount">¥${seat.amount.toLocaleString()}</b></div>
+            <div><span>收款账户</span><b class="payee-account">${PAYMENT_ACCOUNT}</b></div>
+            <div>
+              <span>剩余时间</span>
+              <b class="${isUrgent ? 'urgent' : ''}">${seat.receipt?.verified ? '已生效' : `${remain} 天${isUrgent ? ' · 即将到期' : ''}`}</b>
+            </div>
+            <div><span>席位编号</span><b>${seat.seatId}</b></div>
+            <div><span>凭证状态</span><b>${seat.receipt?.verified ? `<span class="badge gray">已上传</span>` : `<span class="badge gold">待管理员上传</span>`}</b></div>
+          </div>
+          <button class="btn btn-ghost btn-block" data-action="view-receipt" data-seat="${seat.seatId}">查看凭证</button>
+        </article>
+      `;
+    }).join('')}
+  </section>`;
 }
 
 function renderProfileGuest() {
@@ -1118,10 +1576,12 @@ function renderProfileGuest() {
     </section>
     <section class="section">
       <div class="card menu">
-        <button class="menu-row" data-go="transparent"><span class="menu-icon">溯</span><span>募缘与查询</span><small>无需登录 ›</small></button>
         <button class="menu-row" data-go="consult"><span class="menu-icon">问</span><span>专项咨询</span><small>›</small></button>
-        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴大藏经</span><small>›</small></button>
+        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴藏</span><small>›</small></button>
       </div>
+    </section>
+    <section class="section">
+      <button class="btn btn-block btn-primary" data-action="login">登录 / 注册</button>
     </section>
   </div>`;
 }
@@ -1147,6 +1607,7 @@ function myDonationCard(d) {
     <div class="book-progress-label" style="margin-top:10px"><span>修藏进度</span><b>${progress}%</b></div>
     <div class="progress ${progress === 100 ? 'gold' : ''}"><i style="width:${progress}%"></i></div>
     <div class="donation-progress-info"><span>认捐 ¥${d.amount.toLocaleString()}</span><span>${d.date}</span></div>
+    <button class="btn btn-ghost btn-block" style="margin-top:10px" data-action="view-mydonation-receipt" data-donation="${d.certId}">查看凭证</button>
   </article>`;
 }
 
@@ -1158,7 +1619,46 @@ function bindPageEvents() {
   document.querySelectorAll('[data-transparent]').forEach(el => el.addEventListener('click', () => { state.transparentTab = el.dataset.transparent; render(); }));
   document.querySelectorAll('[data-catalog-tab]').forEach(el => el.addEventListener('click', () => { state.catalogTab = el.dataset.catalogTab; render(); }));
   document.querySelectorAll('[data-catalog-view]').forEach(el => el.addEventListener('click', () => { state.catalogView = el.dataset.catalogView; render(); }));
-  document.querySelectorAll('[data-action]').forEach(el => el.addEventListener('click', e => { if (e.target.closest('[data-stop]')) { e.stopPropagation(); } else handleAction(el.dataset.action); }));
+  document.querySelectorAll('[data-action]').forEach(el => el.addEventListener('click', e => {
+    // 仅当事件来自纯包装元素（如 checkbox 外壳）且自身没有 action 时，
+    // 才阻止冒泡；带 data-action 的按钮（如 上传凭证/查看凭证/查看）需正常处理
+    if (e.target.closest('[data-stop]') && !e.target.closest('[data-action]')) {
+      e.stopPropagation();
+      return;
+    }
+    // 若当前元素是容器（如 article），且点击来自其内部带 data-action 的子元素，
+    // 则跳过自身 handler，让子元素 handler 处理
+    if (el !== e.target.closest('[data-action]')) return;
+    const action = el.dataset.action;
+    if (action === 'upload-receipt-admin') {
+      // 管理员上传凭证
+      e.stopPropagation();
+      if (!state.adminLoggedIn) return showToast('仅管理员可上传凭证');
+      return adminUploadReceipt(el.dataset.seat);
+    }
+    if (action === 'view-receipt') {
+      // 普通用户 / 管理员查看凭证（只读）
+      e.stopPropagation();
+      return viewReceipt(el.dataset.seat);
+    }
+    if (action === 'view-mydonation-receipt') {
+      // "我的认捐"模块查看凭证
+      e.stopPropagation();
+      const donation = state.myDonations.find(x => x.certId === el.dataset.donation);
+      return viewMyDonationReceipt(donation);
+    }
+    if (action === 'open-book') {
+      e.stopPropagation();
+      return openBook(el.dataset.book);
+    }
+    if (action === 'view-cert') {
+      e.stopPropagation();
+      const cert = state.certificates[state.certificates.length - 1];
+      if (cert) openInfo('证书详情', certificateHtml(cert));
+      return;
+    }
+    handleAction(action);
+  }));
   document.querySelectorAll('[data-sample-tab]').forEach(el => el.addEventListener('click', () => { state.sampleTab = el.dataset.sampleTab; render(); }));
   document.querySelectorAll('[data-zoom]').forEach(el => el.addEventListener('click', () => openZoom(el.dataset.zoom, el.dataset.zoomCaption)));
   // 子类型折叠/展开
@@ -1278,15 +1778,20 @@ function handleGo(target) {
   if (target === 'catalog-list') { state.catalogTab = '目录'; state.catalogView = '全部'; return setPage('catalog'); }
   if (target === 'inscriptions') return openInfo('大德高僧题词', inscriptionsHtml());
   if (target === 'consult') return openConsult();
+  if (target === 'my-seats') return setPage('profile');
 }
 
 function handleAction(action) {
   const messages = { 'fund-detail': '已生成 2026 年 8 月资金公开明细', trace: '存证信息校验一致，记录未被篡改' };
   if (action === 'login') return openLogin();
+  if (action === 'logout') return doLogout();
+  if (action === 'switch-user') return switchToUser();
+  if (action === 'go-pending-seats') { state.page = 'catalog'; state.catalogTab = '认捐中'; state.catalogView = '认捐中'; render(); return; }
   if (action === 'invite') return openInvite();
   if (action === 'certificates') return openCertificates();
   if (action === 'cert-detail') { const cert = state.certificates[0]; if (cert) openInfo('证书详情', certificateHtml(cert)); return; }
   if (action === 'points-detail') return openPointsDetail();
+  if (action === 'my-gifts') return openMyGifts();
   if (action === 'my-donations') return openMyDonations();
   if (action === 'verify') return openVerify();
   if (action === 'profile-edit') return openInfo('个人资料', `<div class="field"><label>称谓</label><input value="${state.user.name}"></div><div class="field"><label>手机号</label><input value="${state.user.phone}"></div><div class="field"><label>功德主编号</label><input value="${state.user.code}" disabled></div><button class="btn btn-primary btn-block" id="save-profile">保存</button>`);
@@ -1317,31 +1822,62 @@ function renderCartPledge() {
     body = `<h3 class="flow-title">先完成会员注册</h3><p class="flow-desc">本次共认捐 ${count} 部经书，用于建立功德主账号、签署协议并接收荣誉证书。</p>${loginFields()}<label class="check"><input id="privacy" type="checkbox"><span>我已阅读并同意《用户服务协议》与《隐私政策》</span></label>`;
     actions = `<button class="btn btn-ghost" data-prev>取消</button><button class="btn btn-primary" data-next>注册并继续</button>`;
   } else if (state.pledgeStep === 1) {
-    const listHtml = `<div class="cart-pledge-list">${books.map(b => `<div class="cart-pledge-row"><span>${b.title}</span><small>${b.id} · ${b.section} · ${b.volume}</small><b>¥${b.amount.toLocaleString()}</b></div>`).join('')}</div>`;
+    const listHtml = `<div class="cart-pledge-list">${books.map(b => `<div class="cart-pledge-row"><span>${b.title}</span><small>${bookCode(b)} · ${b.section} · ${b.volume}</small><b>¥${b.amount.toLocaleString()}</b></div>`).join('')}</div>`;
     body = `<h3 class="flow-title">阅读并签署捐款协议</h3><p class="flow-desc">本次共认捐 ${count} 部经书，合计 ¥${total.toLocaleString()}。</p>
       ${listHtml}
-      <div class="agreement"><b>《新修嘉兴大藏经》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
+      <div class="agreement"><b>《新修嘉兴藏》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
       <div class="field" style="margin-top:14px"><label>电子签名</label><canvas id="signature" class="sign-canvas" width="360" height="140"></canvas><div class="sign-tools"><span>请在框内手写签名</span><button class="text-link" id="clear-sign">清除</button></div></div>
       <label class="check" style="margin-top:14px"><input id="agree" type="checkbox"><span>本人已完整阅读、理解并接受协议内容</span></label>`;
     actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>确认签署</button>`;
   } else if (state.pledgeStep === 2) {
-    body = `<h3 class="flow-title">展示偏好设置</h3><p class="flow-desc">您可以控制对外公开的姓名与是否在功德簿中展示</p>
-      <div class="pledge-pref">
-        <label class="check"><input id="pref-real-name" type="checkbox" ${state.pledgeUseRealName ? 'checked' : ''}><span><b>是否使用真实姓名签约</b><small>开启后，荣誉证书、捐款协议展示您的真实姓名；关闭后将用法号 / 昵称。</small></span></label>
-        <label class="check"><input id="pref-show-ledger" type="checkbox" ${state.pledgeShowInLedger ? 'checked' : ''}><span><b>是否同意展示在功德簿</b><small>开启后，您的认捐记录将公开在"募缘录 → 功德簿"中。</small></span></label>
+    // ★ 改为「锁定席位 + 收款账户」
+    const listHtml = `<div class="cart-pledge-list">${books.map(b => `<div class="cart-pledge-row"><span>${b.title}</span><small>${bookCode(b)} · ${b.section} · ${b.volume}</small><b>¥${b.amount.toLocaleString()}</b></div>`).join('')}</div>`;
+    body = `<h3 class="flow-title">锁定认捐席位</h3><p class="flow-desc">本次共认捐 ${count} 部经书，合计 ¥${total.toLocaleString()}。</p>
+      ${listHtml}
+      <div class="payee-box">
+        <div class="payee-box-head">请于 <b>${LOCK_DAYS} 天内</b> 向上述收款账户完成合计转账。</div>
+        <div class="payee-box-row"><span>收款方</span><b>新修嘉兴藏项目组</b></div>
+        <div class="payee-box-row">
+          <span>收款账户</span>
+          <b class="payee-account">${PAYMENT_ACCOUNT}</b>
+          <button class="text-link" data-action="copy-account" data-copy="${PAYMENT_ACCOUNT}">复制</button>
+        </div>
+        <div class="payee-box-row"><span>应转金额</span><b class="payee-amount">¥${total.toLocaleString()}</b></div>
+        <div class="payee-box-row"><span>席位有效期</span><b>${LOCK_DAYS} 天</b></div>
       </div>
-      <div class="field" id="display-name-field" style="${state.pledgeUseRealName ? '' : 'display:none'}"><label>${state.pledgeUseRealName ? '签约显示姓名' : '法号 / 昵称'}</label><input id="display-name" value="${state.user.name}" placeholder="如：${state.user.name}"></div>
-      <div class="notice" style="margin-top:12px">提示：以上两项选择仅影响公开展示，不影响您的实际护持权益与积分到账。</div>
-      <div class="payment-box" style="margin-top:12px"><div class="payment-line payment-total"><span>本次合计</span><strong>¥${total.toLocaleString()}</strong></div></div>`;
-    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-gold" data-next>确认支付</button>`;
+      <div class="payee-tips">
+        <div class="payee-tip">⏰ 请在 <b>${LOCK_DAYS} 天内</b> 留意【经目 → 认捐中】中各经书的凭证上传情况。</div>
+        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明：每部经书的<b>经书编号 + 捐赠者姓名</b>。</div>
+      </div>
+      <div class="notice">转账完成后，<b>无需自己上传凭证</b>——管理员在银行账户收到您的汇款后，将在【经目 → 认捐中】为您上传收款凭证并确认认捐。</div>`;
+    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>锁定全部席位</button>`;
   } else {
-    body = `<div class="center"><div class="success-mark">✓</div><h3 class="flow-title">护持圆满</h3><p class="flow-desc">已合计获得 ${total.toLocaleString()} 功德积分，本次共认捐 ${count} 部经书，记录与电子协议已存证。</p></div>${certificateHtml({ amount: total, book: `批量认捐 · 共 ${count} 部经书` })}`;
-    actions = `<button class="btn btn-ghost" data-close>完成</button>`;
+    // ★ 改为「席位已锁定」汇总提示
+    const seats = state._lastLockedSeats || [];
+    const remain = seats.length ? seatRemainDays(seats[0]) : 0;
+    const seatsHtml = seats.map(s => {
+      const b = books.find(x => x.id === s.bookId);
+      return `<div class="seat-mine-row"><span>${b?.title || s.bookId}</span><small>${s.seatId}</small><b>¥${s.amount.toLocaleString()}</b></div>`;
+    }).join('');
+    body = `<div class="center"><div class="success-mark">⌛</div>
+      <h3 class="flow-title">${seats.length} 个席位已锁定</h3>
+      <p class="flow-desc">
+        请于 <b>${remain} 天</b> 内逐部完成转账与凭证上传。<br>
+        凭证上传后即视为认捐完成。
+      </p></div>
+      <div class="payee-box" style="margin-top:14px">
+        <div class="payee-box-row"><span>收款账户</span><b class="payee-account">${PAYMENT_ACCOUNT}</b></div>
+        <div class="payee-box-row"><span>应转金额合计</span><b class="payee-amount">¥${total.toLocaleString()}</b></div>
+      </div>
+      <div class="seat-list-mini">${seatsHtml}</div>`;
+    actions = `<button class="btn btn-primary" data-close>完成</button>`;
   }
   overlayRoot.innerHTML = `<div class="overlay"><section class="sheet">${steps}<div class="sheet-body">${body}</div><div class="sheet-actions">${actions}</div></section></div>`;
   bindOverlayBase();
   overlayRoot.querySelector('[data-next]')?.addEventListener('click', nextCartPledge);
   overlayRoot.querySelector('[data-prev]')?.addEventListener('click', () => { state.pledgeStep -= 1; renderCartPledge(); });
+  overlayRoot.querySelectorAll('[data-action="copy-account"]').forEach(btn =>
+    btn.addEventListener('click', e => { e.stopPropagation(); copyToClipboard(btn.dataset.copy); showToast('收款账户已复制'); }));
   if (state.pledgeStep === 1) setupSignature();
   if (state.pledgeStep === 2) {
     const realName = document.querySelector('#pref-real-name');
@@ -1361,6 +1897,17 @@ function nextCartPledge() {
     const phone = document.querySelector('#phone').value.trim();
     const name = document.querySelector('#name').value.trim() || '居士';
     if (!phone) return showToast('请填写手机号');
+    // ★ 限制：同一用户同时只能认捐一部经书（管理员例外）
+    if (!state.adminLoggedIn && !canUserPledgeAnother()) {
+      const cur = getUserActivePledge();
+      const book = books.find(b => b.id === cur?.bookId);
+      return showToast(`您已认捐《${book?.title || '一部经书'}》，每位用户同时仅可认捐一部`);
+    }
+    // ★ 限制：批量认捐最多 1 部（与"一部限制"一致）
+    if (state.cart.length > MAX_PLEDGES_PER_USER) {
+      showToast(`每次最多认捐 ${MAX_PLEDGES_PER_USER} 部经书`);
+      state.cart = state.cart.slice(0, MAX_PLEDGES_PER_USER);
+    }
     state.loggedIn = true;
     state.user = { name, phone, code: `GDZ-20260812-${String(286 + state.myDonations.length).padStart(4, '0')}` };
   }
@@ -1369,29 +1916,32 @@ function nextCartPledge() {
     if (!document.querySelector('#agree')?.checked) return showToast('请确认接受捐款协议');
   }
   if (state.pledgeStep === 2) {
+    // ★ 批量锁定席位
     state.pledgeUseRealName = document.querySelector('#pref-real-name')?.checked ?? true;
     state.pledgeShowInLedger = document.querySelector('#pref-show-ledger')?.checked ?? true;
-    const displayNameInput = document.querySelector('#display-name');
-    const displayName = (displayNameInput?.value.trim()) || state.user.name;
-    const isAnonymous = !state.pledgeShowInLedger;
-    const signedName = state.pledgeUseRealName ? displayName : (displayName || '护法居士');
     const picked = state._cartBooks || [];
-    const finalDate = formatDate2();
-    picked.forEach(b => {
-      const bookId = b.id;
-      const existing = (donors[bookId] && donors[bookId][0]) || null;
-      const mergedAmount = existing ? existing.amount + b.amount : b.amount;
-      const certId = `CERT-${formatDate()}-${String(state.certificates.length + 1).padStart(3, '0')}`;
-      const cert = { id: certId, book: b.title, amount: b.amount, bookId, volume: b.volume, date: finalDate, useRealName: state.pledgeUseRealName, showInLedger: state.pledgeShowInLedger, signedName };
-      state.certificates.push(cert);
-      state.myDonations.push({ certId, book: b.title, amount: b.amount, bookId, volume: b.volume, date: finalDate, anonymous: existing ? existing.anonymous : isAnonymous, payMethod: '微信支付', tradeNo: `TX${formatDate()}${String(state.certificates.length).padStart(4, '0')}` });
-      state.points.unshift({ type: 'donation', title: `认捐《${b.title}》（${b.pages}页）`, amount: b.amount, date: finalDate });
-      const finalName = existing ? existing.name : (isAnonymous ? '匿名功德主' : signedName);
-      donors[bookId] = [{ name: finalName, amount: mergedAmount, date: finalDate, anonymous: existing ? existing.anonymous : isAnonymous, realName: existing ? existing.realName : state.pledgeUseRealName }];
-      const idx = donations.findIndex(d => d.book === b.title);
-      const donationRow = { name: finalName, book: b.title, bookId, amount: mergedAmount, date: finalDate };
-      if (idx >= 0) donations[idx] = donationRow; else donations.unshift(donationRow);
+    const lockedAt = new Date();
+    const expiresAt = new Date(lockedAt.getTime() + LOCK_DAYS * 86400000);
+    const newSeats = [];
+    picked.forEach((b, idx) => {
+      const seatId = `SEAT-${formatDate()}-${String((state.mySeats.length + idx + 1) + Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+      const seat = {
+        seatId,
+        bookId: b.id,
+        userName: state.user.name,
+        userPhone: state.user.phone,
+        amount: b.amount,
+        lockedAt: lockedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        receipt: null
+      };
+      seats[b.id] = seats[b.id] || [];
+      seats[b.id].push(seat);
+      newSeats.push(seat);
     });
+    state.mySeats = state.mySeats || [];
+    state.mySeats.push(...newSeats);
+    state._lastLockedSeats = newSeats;
     state.cart = [];
     state._cartBooks = null;
   }
@@ -1401,10 +1951,10 @@ function nextCartPledge() {
 
 /* ========== 关于弹窗 ========== */
 function openAbout() {
-  openInfo('关于新修嘉兴大藏经', `
+  openInfo('关于新修嘉兴藏', `
     <div class="section-head" style="padding:0;margin-bottom:12px"><h2>项目缘起</h2></div>
     <div class="protocol-block">
-      <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修嘉兴大藏经》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
+      <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修嘉兴藏》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
     </div>
     <div class="section-head" style="padding:0;margin:14px 0 8px"><h2>底本特色</h2></div>
     <div class="protocol-block">
@@ -1455,7 +2005,7 @@ function renderPreview() {
       <div class="intro-card" style="margin-top:14px">
         <h3 style="margin:0 0 6px;font-family:'STKaiti',serif;color:#7a5520;font-size:16px">${book.title}</h3>
         <p style="margin:0;color:#786b58;font-size:12px;line-height:1.7">${book.summary}</p>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #ead9b3;display:flex;justify-content:space-between;font-size:11px;color:#786b58"><span>编号 ${book.id}</span><span>${stageInfo.label}</span></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #ead9b3;display:flex;justify-content:space-between;font-size:11px;color:#786b58"><span>编号 ${bookCode(book)}</span><span>${stageInfo.label}</span></div>
       </div>`;
   } else if (tab === 'ledger') {
     const list = donors[book.id] || [];
@@ -1539,7 +2089,7 @@ function renderPledge() {
     actions = `<button class="btn btn-ghost" data-close>取消</button><button class="btn btn-primary" data-next>注册并继续</button>`;
   } else if (state.pledgeStep === 1) {
     body = `<h3 class="flow-title">阅读并签署捐款协议</h3><p class="flow-desc">认捐经书：${state.selectedBook.title}（共${state.selectedBook.pages}页）</p>
-      <div class="agreement"><b>《新修嘉兴大藏经》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分，可在平台购物时使用（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
+      <div class="agreement"><b>《新修嘉兴藏》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分，可在平台购物时使用（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
       <div class="field" style="margin-top:14px"><label>电子签名</label><canvas id="signature" class="sign-canvas" width="360" height="140"></canvas><div class="sign-tools"><span>请在框内手写签名</span><button class="text-link" id="clear-sign">清除</button></div></div>
       <div class="field" style="margin-top:14px">
         <label>常住地区</label>
@@ -1561,13 +2111,31 @@ function renderPledge() {
       <label class="check"><input id="agree" type="checkbox"><span>本人已完整阅读、理解并接受协议内容</span></label>`;
     actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>确认签署</button>`;
   } else if (state.pledgeStep === 2) {
-    body = `<h3 class="flow-title">确认护持金额</h3><p class="flow-desc">认捐经书：${state.selectedBook.title} · 共${state.selectedBook.pages}页 · ¥${PER_PAGE_PRICE}/页</p>
+    // ★ 改为「确认认捐 + 展示收款账户 + 锁定席位」
+    body = `<h3 class="flow-title">确认认捐金额</h3><p class="flow-desc">认捐经书：${state.selectedBook.title} · 共${state.selectedBook.pages}页 · ¥${PER_PAGE_PRICE}/页</p>
       <div class="field"><label>认捐金额（修一页 ¥${PER_PAGE_PRICE}）</label>
         <div class="amount-options amount-options-single"><button class="amount-option active" data-amount="${state.selectedBook.amount}">¥${state.selectedBook.amount.toLocaleString()}</button></div>
       </div>
       <div class="field"><label>护持留言（选填）</label><textarea id="pledge-message" placeholder="愿以此功德，庄严佛净土……"></textarea></div>
-      <div class="payment-box"><div class="payment-line"><span>认捐经书</span><b>${state.selectedBook.title}</b></div><div class="payment-line"><span>页数 × 单价</span><b>${state.selectedBook.pages}页 × ¥${PER_PAGE_PRICE}</b></div><div class="payment-line"><span>支付方式</span><b>微信支付 ›</b></div><div class="payment-line payment-total"><span>合计</span><strong>¥${state.amount.toLocaleString()}</strong></div></div>`;
-    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>下一步</button>`;
+
+      <!-- ★ 收款账户信息 + 转账须知 -->
+      <div class="payee-box">
+        <div class="payee-box-head">请点击下方「锁定席位」后，于 <b>${LOCK_DAYS} 天内</b> 向上述收款账户完成转账。</div>
+        <div class="payee-box-row"><span>收款方</span><b>新修嘉兴藏项目组</b></div>
+        <div class="payee-box-row">
+          <span>收款账户</span>
+          <b class="payee-account">${PAYMENT_ACCOUNT}</b>
+          <button class="text-link" data-action="copy-account" data-copy="${PAYMENT_ACCOUNT}">复制</button>
+        </div>
+        <div class="payee-box-row"><span>应转金额</span><b class="payee-amount">¥${state.amount.toLocaleString()}</b></div>
+        <div class="payee-box-row"><span>席位有效期</span><b>${LOCK_DAYS} 天（锁定后开始计时）</b></div>
+      </div>
+      <div class="payee-tips">
+        <div class="payee-tip">⏰ 请在 <b>${LOCK_DAYS} 天内</b> 留意【经目 → 认捐中】中本经书的凭证上传情况。</div>
+        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明：<b>${state.selectedBook.id} · ${state.user.name || state.user.code}</b>（经书编号 + 捐赠者姓名）。</div>
+      </div>
+      <div class="notice">转账完成后，<b>无需自己上传凭证</b>——管理员在银行账户收到您的汇款后，将在【经目 → 认捐中】为您上传收款凭证并确认认捐。</div>`;
+    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>锁定席位</button>`;
   } else if (state.pledgeStep === 3) {
     body = `<h3 class="flow-title">展示偏好设置</h3><p class="flow-desc">您可以控制对外公开的姓名与是否在功德簿中展示</p>
       <div class="pledge-pref">
@@ -1576,11 +2144,30 @@ function renderPledge() {
       </div>
       <div class="field" id="display-name-field" style="${state.pledgeUseRealName ? '' : 'display:none'}"><label>${state.pledgeUseRealName ? '签约显示姓名' : '法号 / 昵称'}</label><input id="display-name" value="${state.user.name}" placeholder="如：${state.user.name}"></div>
       <div class="notice" style="margin-top:12px">提示：以上两项选择仅影响公开展示，不影响您的实际护持权益与积分到账。</div>`;
-    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-gold" data-next>确认支付</button>`;
+    actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>下一步</button>`;
   } else {
-    const certificate = state.certificates.at(-1);
-    body = `<div class="center"><div class="success-mark">✓</div><h3 class="flow-title">护持圆满</h3><p class="flow-desc">已获得 ${state.amount.toLocaleString()} 功德积分，认捐记录与电子协议已存证。</p></div>${certificateHtml(certificate)}`;
-    actions = `<button class="btn btn-ghost" data-close>完成</button><button class="btn btn-primary" data-verify-cert>在线认证证书</button>`;
+    // ★ 改为「席位已锁定」提示页
+    const seat = state._lastLockedSeat;
+    const remain = seatRemainDays(seat);
+    const expiresAtShort = seat ? seat.expiresAt.replace('T', ' ').slice(0, 16) : '';
+    body = `<div class="center"><div class="success-mark">⌛</div>
+      <h3 class="flow-title">席位已锁定 · 等待管理员确认</h3>
+      <p class="flow-desc">
+        请于 <b>${remain} 天</b> 内向收款账户转账 ¥${state.amount.toLocaleString()}；<br>
+        转账完成后<b>无需自行上传凭证</b>，管理员在银行账户收到您的汇款后，<br>
+        将在【经目 → 认捐中】为您上传收款凭证并确认认捐。
+      </p></div>
+      <div class="payee-box" style="margin-top:14px">
+        <div class="payee-box-row"><span>席位编号</span><b>${seat?.seatId || ''}</b></div>
+        <div class="payee-box-row"><span>认捐经书</span><b>${state.selectedBook?.title || ''}</b></div>
+        <div class="payee-box-row"><span>收款账户</span><b class="payee-account">${PAYMENT_ACCOUNT}</b></div>
+        <div class="payee-box-row"><span>应转金额</span><b class="payee-amount">¥${state.amount.toLocaleString()}</b></div>
+        <div class="payee-box-row"><span>到期时间</span><b>${expiresAtShort}</b></div>
+      </div>
+      <div class="payee-tips" style="margin-top:10px">
+        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明：<b>${state.selectedBook?.id} · ${state.user.name}</b></div>
+      </div>`;
+    actions = `<button class="btn btn-primary" data-close>完成</button>`;
   }
   overlayRoot.innerHTML = `<div class="overlay"><section class="sheet">${steps}<div class="sheet-body">${body}</div><div class="sheet-actions">${actions}</div></section></div>`;
   bindOverlayBase();
@@ -1588,6 +2175,10 @@ function renderPledge() {
   overlayRoot.querySelector('[data-prev]')?.addEventListener('click', () => { state.pledgeStep -= 1; renderPledge(); });
   overlayRoot.querySelectorAll('[data-amount]').forEach(btn => btn.addEventListener('click', () => { state.amount = Number(btn.dataset.amount); renderPledge(); }));
   overlayRoot.querySelector('[data-verify-cert]')?.addEventListener('click', () => openVerify(true));
+  // 收款账户复制
+  overlayRoot.querySelectorAll('[data-action="copy-account"]').forEach(btn =>
+    btn.addEventListener('click', e => { e.stopPropagation(); copyToClipboard(btn.dataset.copy); showToast('收款账户已复制'); }));
+  // 席位锁定成功页已不再有"上传凭证"按钮；保留兼容占位
   if (state.pledgeStep === 1) setupSignature();
   if (state.pledgeStep === 3) {
     const realName = document.querySelector('#pref-real-name');
@@ -1613,6 +2204,12 @@ function nextPledge() {
     const phone = document.querySelector('#phone').value.trim();
     const name = document.querySelector('#name').value.trim() || '居士';
     if (!phone) return showToast('请填写手机号');
+    // ★ 限制：同一用户同时只能认捐一部经书（管理员例外）
+    if (!state.adminLoggedIn && !canUserPledgeAnother()) {
+      const cur = getUserActivePledge();
+      const book = books.find(b => b.id === cur?.bookId);
+      return showToast(`您已认捐《${book?.title || '一部经书'}》，每位用户同时仅可认捐一部`);
+    }
     state.loggedIn = true;
     state.user = { name, phone, code: `GDZ-20260812-${String(286 + state.myDonations.length).padStart(4, '0')}` };
   }
@@ -1627,35 +2224,32 @@ function nextPledge() {
     state.region = { country, province, city };
     if (!document.querySelector('#agree')?.checked) return showToast('请确认接受捐款协议');
   }
+  if (state.pledgeStep === 2) {
+    // ★ 创建锁定席位（不立即落账）
+    const seatId = `SEAT-${formatDate()}-${String((state.mySeats.length + 1) + Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+    const lockedAt = new Date();
+    const expiresAt = new Date(lockedAt.getTime() + LOCK_DAYS * 86400000);
+    const seat = {
+      seatId,
+      bookId: state.selectedBook.id,
+      userName: state.user.name,
+      userPhone: state.user.phone,
+      amount: state.amount,
+      lockedAt: lockedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      receipt: null,
+      message: document.querySelector('#pledge-message')?.value?.trim() || ''
+    };
+    seats[state.selectedBook.id] = seats[state.selectedBook.id] || [];
+    seats[state.selectedBook.id].push(seat);
+    state.mySeats = state.mySeats || [];
+    state.mySeats.push(seat);
+    state._lastLockedSeat = seat;
+  }
   if (state.pledgeStep === 3) {
-    // 原则：一部经书只对应一位功德主。若该经书已有功德主，则本次认捐视为「续捐 / 加力」，
-    // 同一经书在功德簿中仍只展示一位名称与金额（金额按最新一次合并）。
-    const bookId = state.selectedBook.id;
-    const existing = (donors[bookId] && donors[bookId][0]) || null;
-    const mergedAmount = existing ? existing.amount + state.amount : state.amount;
-
-    // 收集展示偏好
+    // ★ 只收集展示偏好；落账推迟到凭证上传通过时由 finalizeSeat 完成
     state.pledgeUseRealName = document.querySelector('#pref-real-name')?.checked ?? true;
     state.pledgeShowInLedger = document.querySelector('#pref-show-ledger')?.checked ?? true;
-    const displayNameInput = document.querySelector('#display-name');
-    const displayName = (displayNameInput?.value.trim()) || state.user.name;
-
-    // 生成证书与记录
-    const certId = `CERT-${formatDate()}-${String(state.certificates.length + 1).padStart(3, '0')}`;
-    const isAnonymous = !state.pledgeShowInLedger;
-    const signedName = state.pledgeUseRealName ? displayName : (displayName || '护法居士');
-    const cert = { id: certId, book: state.selectedBook.title, amount: state.amount, bookId: state.selectedBook.id, volume: state.selectedBook.volume, date: formatDate2(), useRealName: state.pledgeUseRealName, showInLedger: state.pledgeShowInLedger, signedName };
-    state.certificates.push(cert);
-    state.myDonations.push({ certId, book: state.selectedBook.title, amount: state.amount, bookId: state.selectedBook.id, volume: state.selectedBook.volume, date: formatDate2(), anonymous: isAnonymous, payMethod: '微信支付', tradeNo: `TX${formatDate()}${String(state.certificates.length).padStart(4, '0')}` });
-    state.points.unshift({ type: 'donation', title: `认捐《${state.selectedBook.title}》（${state.selectedBook.pages}页）`, amount: state.amount, date: formatDate2() });
-    // 同步到该经书的功德簿：始终只保留一条记录（同一经书仅一位功德主）
-    const finalName = existing ? existing.name : (isAnonymous ? '匿名功德主' : signedName);
-    const finalDate = formatDate2();
-    donors[bookId] = [{ name: finalName, amount: mergedAmount, date: finalDate, anonymous: existing ? existing.anonymous : isAnonymous, realName: existing ? existing.realName : state.pledgeUseRealName }];
-    // 公开募缘录：同经只保留一行
-    const idx = donations.findIndex(d => d.book === state.selectedBook.title);
-    const donationRow = { name: finalName, book: state.selectedBook.title, bookId: state.selectedBook.id, amount: mergedAmount, date: finalDate };
-    if (idx >= 0) donations[idx] = donationRow; else donations.unshift(donationRow);
   }
   state.pledgeStep += 1;
   renderPledge();
@@ -1678,29 +2272,107 @@ function setupSignature() {
 
 function certificateHtml(certificate = {}) {
   const id = certificate.id || 'CERT-20260816-001';
-  const book = certificate.book || state.selectedBook?.title || '新修嘉兴大藏经';
+  const book = certificate.book || state.selectedBook?.title || '新修嘉兴藏';
   const amount = certificate.amount || state.amount;
   const name = state.user?.name || '莲心居士';
-  return `<div class="certificate"><img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面"><h3>修藏荣誉证书</h3><p>兹敬谢 <b>${name}</b><br>发心护持《${book}》<br>护持金额 ¥${amount.toLocaleString()}</p><small>证书编号：${id}</small>${qrHtml()}</div>`;
+  return `<div class="certificate"><img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面"><h3>修藏荣誉证书</h3><p>兹敬谢 <b>${name}</b><br>发心护持《${book}》<br>护持金额 ¥${amount.toLocaleString()}</p><small>证书编号：${id}</small></div>`;
 }
 
+// 二维码相关代码（qrHtml / 在线认证）已从证书中移除，函数保留以避免外部误调用
 function qrHtml() {
-  const cells = [1,1,1,0,1,1,0,1,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1,1,1];
-  return `<div class="qr" aria-label="证书认证二维码">${cells.map(cell => `<i style="opacity:${cell ? 1 : 0}"></i>`).join('')}</div><small>扫码在线认证</small>`;
+  return '';
 }
 
 function openLogin() {
-  openSheet('会员登录 / 注册', `${loginFields()}<label class="check"><input id="privacy" type="checkbox" checked><span>我已阅读并同意用户服务协议与隐私政策</span></label>`, `<button class="btn btn-ghost" data-close>取消</button><button class="btn btn-primary" id="do-login">登录</button>`);
+  const tab = state._loginRole === 'admin' ? 'admin' : 'user';
+  const userActive = tab === 'user' ? 'active' : '';
+  const adminActive = tab === 'admin' ? 'active' : '';
+  const userPanel = `<div class="login-panel" data-panel="user" style="${tab === 'user' ? '' : 'display:none'}">
+    ${loginFields()}
+    <label class="check"><input id="privacy" type="checkbox" checked><span>我已阅读并同意用户服务协议与隐私政策</span></label>
+  </div>`;
+  const adminPanel = `<div class="login-panel" data-panel="admin" style="${tab === 'admin' ? '' : 'display:none'}">
+    <div class="field"><label>管理员账号</label><input id="admin-user" value="admin" autocomplete="username"></div>
+    <div class="field"><label>密码</label><input id="admin-pass" type="password" value="admin123" autocomplete="current-password"></div>
+    <div class="notice">管理员用于统一管理赠书情况、上传收款凭证。<br>普通用户请切换至「普通用户」标签。</div>
+  </div>`;
+
+  openSheet('会员登录 / 注册', `
+    <div class="segment" style="margin-bottom:14px">
+      <button class="${userActive}" data-role="user">普通用户</button>
+      <button class="${adminActive}" data-role="admin">管理员登录</button>
+    </div>
+    ${userPanel}
+    ${adminPanel}
+  `, `<button class="btn btn-ghost" data-close>取消</button><button class="btn btn-primary" id="do-login">登录</button>`);
+
+  // 角色切换
+  document.querySelectorAll('[data-role]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      state._loginRole = btn.dataset.role;
+      closeOverlay();
+      openLogin();
+    }));
+
   document.querySelector('#do-login').addEventListener('click', () => {
+    const next = state._loginNext;
+    state._loginNext = null;
+    if (tab === 'admin') {
+      const u = document.querySelector('#admin-user').value.trim();
+      const p = document.querySelector('#admin-pass').value;
+      if (u !== ADMIN_ACCOUNT.username || p !== ADMIN_ACCOUNT.password) return showToast('账号或密码错误');
+      // 管理员登录：清空普通用户登录态（同一时刻只能有一个角色）
+      state.loggedIn = false;
+      state.user = null;
+      state.cart = [];
+      state.mySeats = [];
+      state.adminLoggedIn = true;
+      state.adminUser = { name: ADMIN_ACCOUNT.displayName, username: u };
+      closeOverlay();
+      showToast(`欢迎，${ADMIN_ACCOUNT.displayName}`);
+      render();
+      return;
+    }
     const phone = document.querySelector('#phone').value.trim();
     const name = document.querySelector('#name').value.trim() || '居士';
     state.loggedIn = true;
     state.user = { name, phone, code: `GDZ-20260812-${String(286 + state.myDonations.length).padStart(4, '0')}` };
-    const next = state._loginNext;
-    state._loginNext = null;
-    closeOverlay(); showToast('登录成功');
+    closeOverlay();
+    showToast('登录成功');
     if (typeof next === 'function') { next(); } else { render(); }
   });
+}
+
+// 退出登录（含普通用户 / 管理员）
+function doLogout() {
+  if (state.adminLoggedIn) {
+    state.adminLoggedIn = false;
+    state.adminUser = null;
+    showToast('管理员已退出');
+    render();
+    return;
+  }
+  state.loggedIn = false;
+  state.user = null;
+  state.cart = [];
+  state.mySeats = [];
+  showToast('已退出登录');
+  render();
+}
+
+// 管理员模式中切换为普通用户（不退出管理员会话，仅切回居士视图）
+function switchToUser() {
+  // 同时保留管理员会话，但当前页切换为普通用户视角
+  // （如果想完全退出管理员，请用「退出管理员」按钮）
+  state.adminLoggedIn = false;
+  state.adminUser = null;
+  // 让 demoUser 重新生效
+  if (state.demoUser) {
+    state.loggedIn = true;
+    state.user = { ...state.demoUser };
+  }
+  showToast('已切换到普通用户（居士）');
+  render();
 }
 
 // 弹登录，登录成功后执行 callback
@@ -1750,10 +2422,150 @@ function openCertificates() {
   if (!state.loggedIn) return openLogin();
   openInfo('我的荣誉证书', state.certificates.length ? state.certificates.map(cert => `
     <article class="cert-card">
-      <div class="cert-card-head"><strong>${cert.book}</strong><div class="cert-actions"><button data-action="share-cert">分享</button><button data-action="verify-cert">认证</button></div></div>
+      <div class="cert-card-head"><strong>${cert.book}</strong></div>
       <div class="cert-card-body">${certificateHtml(cert)}</div>
     </article>
   `).join('') : '<div class="empty">尚未获得荣誉证书<br><small>完成认捐后将自动生成</small></div>');
+}
+
+/* ========== 我的赠品（3 项服务：阅藏指南/牌记/祈福法会） ========== */
+function openMyGifts() {
+  if (!state.loggedIn) return openLogin();
+  const gifts = state.myGifts;
+  if (!gifts) {
+    openInfo('我的赠品', `
+      <div class="empty">
+        完成认捐后将自动获得 3 项赠品：<br>
+        ① 嘉兴藏阅藏指南（电子版）<br>
+        ② 牌记（吉祥牌/操作牌）<br>
+        ③ 三德弘法中心祈福法会一次
+      </div>`);
+    return;
+  }
+  const book = books.find(b => b.id === gifts.bookId);
+  const plaqueType = gifts.plaque.type;
+  const plaqueFilled = !!gifts.plaque.type && !!gifts.plaque.content;
+  openInfo('我的赠品', `
+    <div class="notice" style="margin-bottom:12px">
+      完成认捐赠品发放<br>
+      ${book ? '《' + book.title + '》' : ''} · 席位 ${gifts.seatId}
+    </div>
+    <div class="gift-module-list">
+      <!-- 1. 阅藏指南 -->
+      <div class="gift-card">
+        <div class="gift-icon">${GIFT_TYPES.guide.icon}</div>
+        <div class="gift-card-body">
+          <strong>${GIFT_TYPES.guide.name}</strong>
+          <small>领取码：<code>${gifts.guide.code}</code></small>
+          <small>发放时间：${gifts.guide.issuedAt?.slice(0, 10)}</small>
+        </div>
+        <span class="badge gray">已发放</span>
+      </div>
+
+      <!-- 2. 牌记（需选择 + 填写） -->
+      <div class="gift-card">
+        <div class="gift-icon">${GIFT_TYPES.plaque.icon}</div>
+        <div class="gift-card-body">
+          <strong>${GIFT_TYPES.plaque.name}</strong>
+          <small>类型：${plaqueType || '尚未选择'}</small>
+          <small>内容：${plaqueFilled ? gifts.plaque.content : '尚未填写'}</small>
+        </div>
+        <span class="badge ${plaqueFilled ? 'gray' : 'gold'}">${plaqueFilled ? '已提交' : '待填写'}</span>
+      </div>
+
+      <!-- 3. 祈福法会 -->
+      <div class="gift-card">
+        <div class="gift-icon">${GIFT_TYPES.pray.icon}</div>
+        <div class="gift-card-body">
+          <strong>${GIFT_TYPES.pray.name}</strong>
+          <small>预约码：<code>${gifts.pray.code}</code></small>
+          <small>${gifts.pray.date}</small>
+        </div>
+        <span class="badge gray">已发放</span>
+      </div>
+    </div>
+    <div class="btn-group" style="margin-top:14px;display:grid;gap:8px">
+      <button class="btn btn-ghost" data-action="view-guide">查看阅藏指南（电子版）</button>
+      <button class="btn btn-primary" data-action="fill-plaque">${plaqueFilled ? '修改牌记内容' : '选择牌记并填写内容'}</button>
+      <button class="btn btn-ghost" data-action="view-pray">查看祈福法会预约说明</button>
+    </div>
+  `);
+  // 事件
+  document.querySelector('[data-action="view-guide"]')?.addEventListener('click', () => {
+    openInfo('嘉兴藏阅藏指南（电子版）', `
+      <div class="notice">
+        <b>《嘉兴藏阅藏指南》</b> 是为大众快速了解、查阅《嘉兴藏》的导引手册。<br><br>
+        领取码：<code>${gifts.guide.code}</code><br>
+        领取方式：项目组将于近期通过短信/小程序消息发送电子版领取链接。<br><br>
+        <b>预计开放时间：</b>2026 年 12 月
+      </div>`);
+  });
+  document.querySelector('[data-action="view-pray"]')?.addEventListener('click', () => {
+    openInfo('三德弘法中心祈福法会', `
+      <div class="notice">
+        <b>三德弘法中心祈福法会</b> · 法会预约说明<br><br>
+        预约码：<code>${gifts.pray.code}</code><br>
+        法会日程：近期法会日程将在【我的 → 我的赠品】中公布。<br>
+        报名方式：请联系项目组或致电三德弘法中心。<br><br>
+        <b>预计开放时间：</b>2026 年 10 月
+      </div>`);
+  });
+  document.querySelector('[data-action="fill-plaque"]')?.addEventListener('click', () => openPlaqueForm());
+}
+
+// 牌记填写弹窗
+function openPlaqueForm() {
+  if (!state.myGifts) return showToast('暂无赠品');
+  const g = state.myGifts.plaque;
+  openSheet(`${GIFT_TYPES.plaque.name} · 选择与填写`, `
+    <p class="flow-desc">${GIFT_TYPES.plaque.name}将在《嘉兴藏》对应经书首页牌记处镌刻，由项目组统一安排上版排版。</p>
+
+    <div class="field">
+      <label>选择牌记类型</label>
+      <div class="plaque-type-grid">
+        <div class="plaque-type-card ${g.type === '吉祥牌' ? 'selected' : ''}" data-type="吉祥牌">
+          <div class="pt-icon">吉</div>
+          <div class="pt-name">吉祥牌</div>
+          <div class="pt-desc">镌刻吉祥语、祈愿词或祝福寄语</div>
+        </div>
+        <div class="plaque-type-card ${g.type === '操作牌' ? 'selected' : ''}" data-type="操作牌">
+          <div class="pt-icon">作</div>
+          <div class="pt-name">操作牌</div>
+          <div class="pt-desc">镌刻功德主姓名、护持事项等具体操作信息</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>牌记内容</label>
+      <textarea id="plaque-content" placeholder="${g.type === '吉祥牌' ? '请填写吉祥语、祈愿词或祝福寄语（不超过 30 字）' : '请填写姓名、护持事项等具体操作信息（不超过 30 字）'}" maxlength="30">${g.content || ''}</textarea>
+      <small style="color:#786b58;font-size:11px">字数限制 30 字以内</small>
+    </div>
+    <div class="notice">提交后项目组将根据牌记内容排版上版；一经镌刻不可修改，请仔细核对。</div>
+  `, `<button class="btn btn-ghost" data-close>取消</button><button class="btn btn-primary" id="submit-plaque">提交牌记</button>`);
+
+  // 类型切换
+  let selectedType = g.type;
+  document.querySelectorAll('.plaque-type-card').forEach(card => {
+    card.addEventListener('click', () => {
+      selectedType = card.dataset.type;
+      document.querySelectorAll('.plaque-type-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+    });
+  });
+
+  document.querySelector('#submit-plaque')?.addEventListener('click', () => {
+    const content = document.querySelector('#plaque-content')?.value?.trim() || '';
+    if (!selectedType) return showToast('请选择牌记类型');
+    if (!content) return showToast('请填写牌记内容');
+    if (content.length > 30) return showToast('牌记内容不超过 30 字');
+    state.myGifts.plaque.type = selectedType;
+    state.myGifts.plaque.content = content;
+    state.myGifts.plaque.submittedAt = new Date().toISOString();
+    closeOverlay();
+    showToast('牌记已提交');
+    openMyGifts();
+  });
 }
 
 function openMyDonations() {
@@ -1795,9 +2607,343 @@ function openVerify(fromSuccess = false) {
   const actions = overlayRoot.querySelector('.sheet-actions');
   if (actions) actions.style.gridTemplateColumns = '1fr';
   document.querySelector('#check-cert')?.addEventListener('click', () => {
-    document.querySelector('#verify-result').innerHTML = `<div class="notice" style="margin-top:14px"><b>验证通过</b><br>证书签发主体：新修嘉兴大藏经项目组<br>状态：有效 · 存证记录一致</div>`;
+    document.querySelector('#verify-result').innerHTML = `<div class="notice" style="margin-top:14px"><b>验证通过</b><br>证书签发主体：新修嘉兴藏项目组<br>状态：有效 · 存证记录一致</div>`;
   });
   if (fromSuccess) document.querySelector('#check-cert')?.click();
+}
+
+/* ========== 上传支付凭证（OCR 自动识别 + 用户确认） ========== */
+// 模拟 OCR 识别（演示用）：从凭证图片中提取关键字段
+// 真实场景应替换为后端 OCR 服务调用
+function simulateOcr(file, seat) {
+  return new Promise(resolve => {
+    // 演示中模拟 1.5 秒识别时间 + 80% 概率返回正常数据，20% 概率返回轻微差异用于演示警告
+    setTimeout(() => {
+      const baseTime = new Date();
+      baseTime.setMinutes(baseTime.getMinutes() - Math.floor(Math.random() * 30) - 1);
+      const random = Math.random();
+      const ocr = {
+        // 收款账户：与系统账户对比的字段
+        payeeAccount: PAYMENT_ACCOUNT,
+        payeeName: '新修嘉兴藏项目组',
+        // 付款账户（来自凭证）
+        payerAccount: random < 0.2 ? '6225 **** **** ' + String(1000 + Math.floor(Math.random() * 9000)) : '6217 **** **** ' + String(1000 + Math.floor(Math.random() * 9000)),
+        payerName: state.user?.name || '居士',
+        // 付款金额：默认等于席位金额；20% 概率比席位少 1 元用于演示差异警告
+        amount: random < 0.2 ? Math.max(1, seat.amount - 1) : seat.amount,
+        currency: 'CNY',
+        transferTime: baseTime.toISOString().slice(0, 19).replace('T', ' '),
+        bankName: '中国工商银行嘉兴分行',
+        memo: '新修嘉兴藏 · ' + (books.find(b => b.id === seat.bookId)?.title || seat.bookId),
+        fileName: file?.name || 'receipt.jpg',
+        fileSize: file?.size || 0,
+        // 验真结论
+        verify: {
+          payeeMatch: true,
+          amountMatch: random >= 0.2,
+          payerNameMatch: true,
+          transferTimeValid: true,
+          score: random < 0.2 ? 82 : 98
+        }
+      };
+      resolve(ocr);
+    }, 1500);
+  });
+}
+
+// 渲染 OCR 识别结果（只读确认卡）
+function renderOcrResult(ocr, seat) {
+  const amountWarn = ocr.amount !== seat.amount;
+  const payeeWarn = ocr.payeeAccount !== PAYMENT_ACCOUNT;
+  const allOk = ocr.verify.payeeMatch && ocr.verify.amountMatch && ocr.verify.payerNameMatch && ocr.verify.transferTimeValid;
+  return `
+    <div class="ocr-result">
+      <div class="ocr-result-head">
+        <span class="ocr-icon">⌖</span>
+        <strong>识别完成 · 置信度 ${ocr.verify.score}%</strong>
+        <span class="badge ${allOk ? 'gray' : 'gold'}">${allOk ? '凭证有效' : '凭证需核对'}</span>
+      </div>
+
+      <div class="ocr-result-grid">
+        <div class="ocr-row"><span>收款账户</span><b class="${payeeWarn ? 'warn' : ''}">${ocr.payeeAccount}${payeeWarn ? ' ⚠️' : ''}</b></div>
+        <div class="ocr-row"><span>收款方</span><b>${ocr.payeeName}</b></div>
+        <div class="ocr-row"><span>付款账户</span><b>${ocr.payerAccount}</b></div>
+        <div class="ocr-row"><span>付款户名</span><b>${ocr.payerName}</b></div>
+        <div class="ocr-row"><span>付款金额</span><b class="payee-amount ${amountWarn ? 'warn' : ''}">¥${ocr.amount.toLocaleString()}${amountWarn ? ' ⚠️' : ''}</b></div>
+        <div class="ocr-row"><span>付款时间</span><b>${ocr.transferTime}</b></div>
+        <div class="ocr-row"><span>付款银行</span><b>${ocr.bankName}</b></div>
+        <div class="ocr-row"><span>附言</span><b>${ocr.memo}</b></div>
+      </div>
+
+      ${amountWarn ? `<div class="ocr-warn">
+        <b>金额不一致</b><br>
+        系统识别金额 ¥${ocr.amount.toLocaleString()}，与席位金额 ¥${seat.amount.toLocaleString()} 相差 ¥${Math.abs(seat.amount - ocr.amount).toLocaleString()}。<br>
+        请核对凭证或联系项目组处理。
+      </div>` : ''}
+      ${payeeWarn ? `<div class="ocr-warn">
+        <b>收款账户不匹配</b><br>
+        凭证收款账户与本项目收款账户不一致，请勿继续并联系项目组核实。
+      </div>` : ''}
+
+      <div class="ocr-result-foot">
+        请核对以上凭证信息，确认无误后点击下方「确认无误，上传凭证」完成认捐。
+      </div>
+    </div>
+  `;
+}
+
+/* ========== 凭证相关：用户只读查看 / 管理员上传 ========== */
+
+// 普通用户只读查看凭证
+function viewReceipt(seatId) {
+  const seat = findSeatById(seatId);
+  if (!seat) return showToast('未找到该席位');
+  const book = books.find(b => b.id === seat.bookId);
+
+  if (!seat.receipt) {
+    // 尚未上传：显示等待提示
+    openInfo('凭证查看', `
+      <div class="notice">
+        <b>凭证尚未上传</b><br>
+        本席位（${seat.seatId}）当前尚未上传收款凭证。<br>
+        管理员在银行账户收到您的汇款后，将上传凭证并确认认捐。<br><br>
+        <b>请在备注中注明：</b>${seat.bookId} · ${seat.userName}<br>
+        <b>应转金额：</b>¥${seat.amount.toLocaleString()}<br>
+        <b>收款账户：</b>${PAYMENT_ACCOUNT}
+      </div>
+    `);
+    return;
+  }
+
+  // 已上传：只读展示 OCR 信息
+  const ocr = seat.receipt;
+  openInfo(`凭证信息 · ${book?.title || ''}`, `
+    <div class="ocr-result">
+      <div class="ocr-result-head">
+        <span class="ocr-icon">✓</span>
+        <strong>凭证已上传</strong>
+        <span class="badge gray">${ocr.verified ? '已生效' : '审核中'}</span>
+      </div>
+      <div class="ocr-result-grid">
+        <div class="ocr-row"><span>收款账户</span><b>${ocr.payeeAccount}</b></div>
+        <div class="ocr-row"><span>收款方</span><b>${ocr.payeeName}</b></div>
+        <div class="ocr-row"><span>付款账户</span><b>${ocr.payerAccount || '—'}</b></div>
+        <div class="ocr-row"><span>付款户名</span><b>${ocr.payerName || '—'}</b></div>
+        <div class="ocr-row"><span>付款金额</span><b class="payee-amount">¥${(ocr.amount || 0).toLocaleString()}</b></div>
+        <div class="ocr-row"><span>付款时间</span><b>${ocr.transferTime || '—'}</b></div>
+        <div class="ocr-row"><span>付款银行</span><b>${ocr.bankName || '—'}</b></div>
+        <div class="ocr-row"><span>附言</span><b>${ocr.memo || '—'}</b></div>
+      </div>
+      <div class="ocr-result-foot">由管理员于 ${ocr.uploadedAt?.slice(0, 19).replace('T', ' ') || '—'} 上传并确认。</div>
+    </div>
+  `);
+}
+
+// 在"我的认捐"模块查看凭证：根据 donation 中保留的 seatId + receipt 字段展示
+function viewMyDonationReceipt(donation) {
+  if (!donation) return showToast('未找到该认捐记录');
+  const book = books.find(b => b.id === donation.bookId);
+  // 优先用 donation 内嵌的 receipt（finalizeSeat 时同步过来）；其次回退到 seats 实时查询
+  let receipt = donation.receipt;
+  if (!receipt && donation.seatId) {
+    const seat = findSeatById(donation.seatId);
+    if (seat && seat.receipt) receipt = seat.receipt;
+  }
+  if (!receipt) {
+    openInfo('凭证查看', `
+      <div class="notice">
+        <b>凭证尚未上传</b><br>
+        本次认捐（${donation.certId}）当前尚未上传收款凭证。<br>
+        管理员在银行账户收到您的汇款后，将上传凭证并确认认捐。
+      </div>
+    `);
+    return;
+  }
+  // 已上传：只读展示 OCR 信息（复用 viewReceipt 的展示样式）
+  const ocr = receipt;
+  openInfo(`凭证信息 · ${book?.title || donation.book || ''}`, `
+    <div class="ocr-result">
+      <div class="ocr-result-head">
+        <span class="ocr-icon">✓</span>
+        <strong>凭证已上传</strong>
+        <span class="badge gray">${ocr.verified ? '已生效' : '审核中'}</span>
+      </div>
+      <div class="ocr-result-grid">
+        <div class="ocr-row"><span>收款账户</span><b>${ocr.payeeAccount}</b></div>
+        <div class="ocr-row"><span>收款方</span><b>${ocr.payeeName}</b></div>
+        <div class="ocr-row"><span>付款账户</span><b>${ocr.payerAccount || '—'}</b></div>
+        <div class="ocr-row"><span>付款户名</span><b>${ocr.payerName || '—'}</b></div>
+        <div class="ocr-row"><span>付款金额</span><b class="payee-amount">¥${(ocr.amount || 0).toLocaleString()}</b></div>
+        <div class="ocr-row"><span>付款时间</span><b>${ocr.transferTime || '—'}</b></div>
+        <div class="ocr-row"><span>付款银行</span><b>${ocr.bankName || '—'}</b></div>
+        <div class="ocr-row"><span>附言</span><b>${ocr.memo || '—'}</b></div>
+      </div>
+      <div class="ocr-result-foot">由管理员于 ${ocr.uploadedAt?.slice(0, 19).replace('T', ' ') || '—'} 上传并确认。</div>
+    </div>
+  `);
+}
+
+// 管理员上传收款凭证
+function adminUploadReceipt(seatId) {
+  const seat = findSeatById(seatId);
+  if (!seat) return showToast('未找到该席位');
+  if (seat.receipt?.verified) return showToast('该席位已完成认捐');
+  const book = books.find(b => b.id === seat.bookId);
+  const remain = seatRemainDays(seat);
+
+  // 管理员弹窗：显示席位信息 + 上传凭证
+  openSheet(`管理员 · 上传收款凭证`, `
+    <div class="payee-box" style="margin-bottom:14px">
+      <div class="payee-box-head">席位信息</div>
+      <div class="payee-box-row"><span>经书</span><b>${book?.title || ''}（${seat.bookId}）</b></div>
+      <div class="payee-box-row"><span>席位编号</span><b>${seat.seatId}</b></div>
+      <div class="payee-box-row"><span>捐赠者</span><b>${seat.userName}</b></div>
+      <div class="payee-box-row"><span>应转金额</span><b class="payee-amount">¥${seat.amount.toLocaleString()}</b></div>
+      <div class="payee-box-row"><span>收款账户</span><b class="payee-account">${PAYMENT_ACCOUNT}</b></div>
+      <div class="payee-box-row"><span>剩余时间</span><b class="${remain <= 1 ? 'urgent' : ''}">${remain} 天</b></div>
+    </div>
+
+    <div class="field">
+      <label>凭证图片（银行收款截图 / 回单）</label>
+      <div class="receipt-uploader">
+        <input type="file" id="receipt-img" accept="image/*" hidden>
+        <button class="btn btn-ghost btn-block" data-action="pick-image">选择凭证图片</button>
+        <div class="receipt-preview" id="receipt-preview" hidden>
+          <img alt="凭证预览">
+          <button class="text-link" data-action="re-pick">重新选择</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="notice">
+      上传凭证图片后，系统将自动识别凭证中的关键信息（付款账户、收款账户、付款金额、付款时间、付款户名等）。<br>
+      识别完成后请核对信息无误后点击确认完成上传并赠送 3 项赠品。
+    </div>
+  `, `<button class="btn btn-ghost" data-close>取消</button>`);
+
+  bindAdminReceiptUploader(seat);
+}
+
+function bindAdminReceiptUploader(seat) {
+  const onPick = () => document.querySelector('#receipt-img').click();
+  document.querySelectorAll('[data-action="pick-image"], [data-action="re-pick"]').forEach(btn =>
+    btn.addEventListener('click', e => { e.stopPropagation(); onPick(); }));
+
+  document.querySelector('#receipt-img')?.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const prev = document.querySelector('#receipt-preview');
+      if (prev) {
+        prev.hidden = false;
+        prev.querySelector('img').src = ev.target.result;
+      }
+    };
+    reader.readAsDataURL(file);
+
+    openSheet('管理员 · 上传收款凭证', `
+      <div class="ocr-loading">
+        <div class="ocr-spinner"></div>
+        <strong>正在识别凭证信息…</strong>
+        <small>系统正在读取凭证图片中的付款账户、金额、时间、户名等信息</small>
+      </div>
+    `, `<button class="btn btn-ghost" data-close>取消</button>`);
+
+    const ocr = await simulateOcr(file, seat);
+
+    openSheet('管理员 · 上传收款凭证', `
+      <div class="receipt-preview" id="receipt-preview" style="margin-bottom:14px">
+        <img alt="凭证预览" src="${document.querySelector('#receipt-preview img')?.src || ''}">
+      </div>
+      ${renderOcrResult(ocr, seat)}
+    `, `<button class="btn btn-ghost" data-close>取消</button>
+        <button class="btn btn-primary" id="confirm-receipt">确认无误，完成认捐</button>`);
+
+    document.querySelector('#confirm-receipt')?.addEventListener('click', () => adminConfirmReceipt(seat, ocr));
+  });
+}
+
+// 管理员确认认捐：写入凭证 + 触发 3 项赠品
+function adminConfirmReceipt(seat, ocr) {
+  if (!ocr) return showToast('凭证未通过识别');
+
+  if (ocr.payeeAccount !== PAYMENT_ACCOUNT) {
+    showToast('收款账户不匹配，已拒绝上传');
+    return;
+  }
+
+  seat.receipt = {
+    uploadedAt: new Date().toISOString(),
+    payeeAccount: ocr.payeeAccount,
+    payeeName: ocr.payeeName,
+    payerAccount: ocr.payerAccount,
+    payerName: ocr.payerName,
+    amount: ocr.amount,
+    transferTime: ocr.transferTime,
+    bankName: ocr.bankName,
+    memo: ocr.memo,
+    verify: ocr.verify,
+    verified: true,
+    verifiedAt: new Date().toISOString(),
+    uploadedBy: 'admin'
+  };
+
+  // 落账
+  finalizeSeat(seat);
+
+  // 触发 3 项赠品发放
+  issueGifts(seat, ocr);
+
+  closeOverlay();
+  showToast('认捐已生效，3 项赠品已发放');
+
+  const book = books.find(b => b.id === seat.bookId);
+  openInfo('护持圆满 · 赠品已发放', `
+    <div class="center"><div class="success-mark">✓</div>
+      <h3 class="flow-title">认捐完成</h3>
+      <p class="flow-desc">凭证已通过识别并上传，《${book?.title || ''}》认捐已生效。</p>
+    </div>
+    <div class="notice">
+      <b>3 项赠品已发放：</b><br>
+      ① ${GIFT_TYPES.guide.name}<br>
+      ② ${GIFT_TYPES.plaque.name}（请在【我的 → 我的赠品】中选择并填写）<br>
+      ③ ${GIFT_TYPES.pray.name}
+    </div>
+    ${certificateHtml({ amount: ocr.amount, book: book?.title })}
+  `);
+}
+
+// 发放 3 项赠品（仅管理员确认认捐后调用）
+function issueGifts(seat, ocr) {
+  // 为该 userName + seat 的归属用户发放（演示：写到当前普通用户 state.myGifts）
+  // 注意：管理员上传的席位可能属于其他用户，演示中只能写到当前 state.user
+  // 生产环境应按 seat.userPhone 找到对应用户再写入
+  state.myGifts = {
+    seatId: seat.seatId,
+    bookId: seat.bookId,
+    issuedAt: new Date().toISOString(),
+    guide: {
+      issued: true,
+      code: `GUIDE-${formatDate()}-${seat.seatId.slice(-3)}`,
+      desc: GIFT_TYPES.guide.name,
+      issuedAt: new Date().toISOString()
+    },
+    plaque: {
+      issued: true,
+      type: null,       // 等待用户选 吉祥牌/操作牌
+      content: '',      // 等待用户填写
+      desc: GIFT_TYPES.plaque.name
+    },
+    pray: {
+      issued: true,
+      code: `SD${formatDate()}-${seat.seatId.slice(-3)}`,
+      date: '近期法会日程（详见【我的 → 我的赠品】）',
+      desc: GIFT_TYPES.pray.name,
+      issuedAt: new Date().toISOString()
+    }
+  };
 }
 
 function openConsult() {
@@ -1869,6 +3015,24 @@ function openZoom(src, caption) {
 function closeZoom() { state.zoom = null; overlayRoot.innerHTML = ''; }
 
 let toastTimer;
+// 简单的剪贴板复制（演示阶段用，失败时降级为提示）
+function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      return true;
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  } catch (e) { return false; }
+}
+
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add('show');
