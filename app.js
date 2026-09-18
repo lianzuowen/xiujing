@@ -953,6 +953,65 @@ function findSeatById(seatId) {
   return null;
 }
 
+// ★ 普通用户取消认捐席位（仅未上传凭证时可取消；确认后释放锁定席位）
+// 取消后该用户即可重新选择其他经书认捐；其他用户也可认捐此经书。
+function cancelMySeat(seatId) {
+  const seat = findSeatById(seatId);
+  if (!seat) return showToast('席位不存在');
+  // 只能取消自己的席位
+  if (!state.user || seat.userPhone !== state.user.phone) {
+    return showToast('只能取消自己的认捐席位');
+  }
+  // 已经上传凭证（无论是否已验证）均不可取消，避免与已到账资金冲突
+  if (seat.receipt) {
+    return showToast('该席位已上传凭证，无法取消认捐');
+  }
+  const book = books.find(b => b.id === seat.bookId);
+  const bookTitle = book?.title || seat.bookId;
+  // 弹出确认弹窗
+  const html = `
+    <div class="info">
+      <h3 class="flow-title">确认取消认捐？</h3>
+      <p class="flow-desc">您将释放已锁定的席位：</p>
+      <div class="seat-mine-info" style="margin:10px 0">
+        <div><span>经名</span><b>${bookTitle}</b></div>
+        <div><span>席位编号</span><b>${seat.seatId}</b></div>
+        <div><span>认捐金额</span><b class="payee-amount">¥${seat.amount.toLocaleString()}</b></div>
+      </div>
+      <div class="notice" style="margin-top:8px">
+        取消后：<br>
+        ① 该席位立即释放，可被其他功德主认捐；<br>
+        ② 您可以重新选择其他经书进行认捐；<br>
+        ③ 若您已完成银行转账，请先与项目组联系后再取消。
+      </div>
+      <div class="info-actions" style="margin-top:16px">
+        <button class="btn btn-ghost" data-cancel>再想想</button>
+        <button class="btn btn-danger" data-confirm>确认取消认捐</button>
+      </div>
+    </div>`;
+  openInfo('取消认捐', html);
+  overlayRoot.querySelector('[data-cancel]')?.addEventListener('click', () => {
+    overlayRoot.innerHTML = '';
+    render();
+  });
+  overlayRoot.querySelector('[data-confirm]')?.addEventListener('click', () => {
+    // 从全局 seats 中删除
+    const list = seats[seat.bookId] || [];
+    seats[seat.bookId] = list.filter(s => s.seatId !== seatId);
+    // 从 state.mySeats 中删除
+    state.mySeats = (state.mySeats || []).filter(s => s.seatId !== seatId);
+    // 清理可能保留的最近锁定引用
+    if (state._lastLockedSeat?.seatId === seatId) state._lastLockedSeat = null;
+    if (Array.isArray(state._lastLockedSeats)) {
+      state._lastLockedSeats = state._lastLockedSeats.filter(s => s.seatId !== seatId);
+      if (state._lastLockedSeats.length === 0) state._lastLockedSeats = null;
+    }
+    overlayRoot.innerHTML = '';
+    showToast(`已取消《${bookTitle}》的认捐席位`);
+    render();
+  });
+}
+
 // 当前用户是否还能再认捐（同一用户最多 1 部）
 // 判定条件：seats 中存在任何属于当前用户的"未释放、未完成"席位 → 不允许
 // 已完成认捐（receipt.verified）也算已占用，直到超时释放才可再次认捐
@@ -1545,7 +1604,10 @@ function renderMySeats() {
             <div><span>席位编号</span><b>${seat.seatId}</b></div>
             <div><span>凭证状态</span><b>${seat.receipt?.verified ? `<span class="badge gray">已上传</span>` : `<span class="badge gold">待管理员上传</span>`}</b></div>
           </div>
-          <button class="btn btn-ghost btn-block" data-action="view-receipt" data-seat="${seat.seatId}">查看凭证</button>
+          <div class="seat-mine-actions">
+            <button class="btn btn-ghost" data-action="view-receipt" data-seat="${seat.seatId}">查看凭证</button>
+            ${!seat.receipt?.verified ? `<button class="btn btn-ghost btn-danger" data-action="cancel-seat" data-seat="${seat.seatId}">取消认捐</button>` : ''}
+          </div>
         </article>
       `;
     }).join('')}
@@ -1640,6 +1702,11 @@ function bindPageEvents() {
       // 普通用户 / 管理员查看凭证（只读）
       e.stopPropagation();
       return viewReceipt(el.dataset.seat);
+    }
+    if (action === 'cancel-seat') {
+      // 普通用户取消自己的认捐席位（仅未上传凭证时可取消）
+      e.stopPropagation();
+      return cancelMySeat(el.dataset.seat);
     }
     if (action === 'view-mydonation-receipt') {
       // "我的认捐"模块查看凭证
@@ -2026,7 +2093,9 @@ function renderPreview() {
   }
   // 原则：一部经书只对应一位功德主；若该经书已有认捐者，则改为「已认捐」状态
   const hasDonor = (donors[book.id] && donors[book.id].length > 0);
-  const isPledgeable = book.status === '可认捐' && !hasDonor;
+  // ★ 业务规则：一名用户同时只能认捐一部经书；如果当前用户已有其他未完成认捐，则不允许再认捐此经书
+  const userHasActivePledge = !!getUserActivePledge();
+  const isPledgeable = book.status === '可认捐' && !hasDonor && !userHasActivePledge;
   overlayRoot.innerHTML = `<div class="preview-overlay"><div class="preview-sheet">
     <header class="preview-head"><h2>${book.title}</h2><button class="icon-btn" data-preview-close aria-label="关闭">×</button></header>
     <div class="preview-tabs">
@@ -2040,7 +2109,9 @@ function renderPreview() {
            <button class="btn btn-ghost" data-preview-close>稍后再看</button>
            <button class="btn btn-gold" data-preview-pledge>确认认捐<br><small>¥${book.amount.toLocaleString()}（${book.pages}页×¥${PER_PAGE_PRICE}/页）</small></button>
          </div>`
-      : `<div class="preview-foot"><button class="btn btn-ghost" data-preview-close>关闭</button><button class="btn btn-primary" data-preview-follow>关注修藏进度</button></div>`
+      : userHasActivePledge
+        ? `<div class="preview-foot"><button class="btn btn-ghost" data-preview-close>关闭</button><button class="btn btn-primary" disabled style="opacity:.55">您已有认捐中的经书</button></div>`
+        : `<div class="preview-foot"><button class="btn btn-ghost" data-preview-close>关闭</button><button class="btn btn-primary" data-preview-follow>关注修藏进度</button></div>`
     }
   </div></div>`;
   bindPreview();
@@ -2073,6 +2144,14 @@ function bindPreview() {
 }
 
 function startPledge() {
+  // ★ 业务规则：一名用户同时只能认捐一部经书（MAX_PLEDGES_PER_USER = 1）
+  // 如果用户已有未完成的认捐（进行中 / 已完成 / 未超期），直接阻止并提示
+  const active = getUserActivePledge();
+  if (active) {
+    const book = books.find(b => b.id === active.bookId);
+    showToast(`您已认捐《${book?.title || active.bookId}》，请等待当前认捐完成后再次认捐`);
+    return;
+  }
   state.pledgeStep = state.loggedIn ? 1 : 0;
   state.amount = state.selectedBook.amount;
   state.signature = false;
@@ -2165,7 +2244,7 @@ function renderPledge() {
         <div class="payee-box-row"><span>到期时间</span><b>${expiresAtShort}</b></div>
       </div>
       <div class="payee-tips" style="margin-top:10px">
-        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明：<b>${state.selectedBook?.id} · ${state.user.name}</b></div>
+        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明<b>捐赠人与捐赠经书编号</b></div>
       </div>`;
     actions = `<button class="btn btn-primary" data-close>完成</button>`;
   }
@@ -2723,7 +2802,7 @@ function viewReceipt(seatId) {
         <b>凭证尚未上传</b><br>
         本席位（${seat.seatId}）当前尚未上传收款凭证。<br>
         管理员在银行账户收到您的汇款后，将上传凭证并确认认捐。<br><br>
-        <b>请在备注中注明：</b>${seat.bookId} · ${seat.userName}<br>
+        <b>请在备注中注明捐赠人与捐赠经书编号</b><br>
         <b>应转金额：</b>¥${seat.amount.toLocaleString()}<br>
         <b>收款账户：</b>${PAYMENT_ACCOUNT}
       </div>
