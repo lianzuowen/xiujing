@@ -2444,6 +2444,7 @@ function openMyGifts() {
   }
   const book = books.find(b => b.id === gifts.bookId);
   const plaqueType = gifts.plaque.type;
+  const plaqueLocked = !!gifts.plaque.locked;
   const plaqueFilled = !!gifts.plaque.type && !!gifts.plaque.content;
   openInfo('我的赠品', `
     <div class="notice" style="margin-bottom:12px">
@@ -2470,7 +2471,7 @@ function openMyGifts() {
           <small>类型：${plaqueType || '尚未选择'}</small>
           <small>内容：${plaqueFilled ? gifts.plaque.content : '尚未填写'}</small>
         </div>
-        <span class="badge ${plaqueFilled ? 'gray' : 'gold'}">${plaqueFilled ? '已提交' : '待填写'}</span>
+        <span class="badge ${plaqueLocked ? 'gray' : (plaqueFilled ? 'gold' : 'gray')}">${plaqueLocked ? '已锁定' : (plaqueFilled ? '已提交' : '待填写')}</span>
       </div>
 
       <!-- 3. 祈福法会 -->
@@ -2486,7 +2487,7 @@ function openMyGifts() {
     </div>
     <div class="btn-group" style="margin-top:14px;display:grid;gap:8px">
       <button class="btn btn-ghost" data-action="view-guide">查看阅藏指南（电子版）</button>
-      <button class="btn btn-primary" data-action="fill-plaque">${plaqueFilled ? '修改牌记内容' : '选择牌记并填写内容'}</button>
+      <button class="btn ${plaqueLocked ? 'btn-ghost' : 'btn-primary'}" ${plaqueLocked ? 'data-action="view-plaque-submitted"' : 'data-action="fill-plaque"'}>${plaqueLocked ? '查看已提交的牌记内容' : (plaqueFilled ? '修改牌记内容' : '选择牌记并填写内容')}</button>
       <button class="btn btn-ghost" data-action="view-pray">查看祈福法会预约说明</button>
     </div>
   `);
@@ -2511,6 +2512,20 @@ function openMyGifts() {
       </div>`);
   });
   document.querySelector('[data-action="fill-plaque"]')?.addEventListener('click', () => openPlaqueForm());
+  document.querySelector('[data-action="view-plaque-submitted"]')?.addEventListener('click', () => {
+    const g = state.myGifts.plaque;
+    openInfo('牌记内容', `
+      <div class="notice" style="margin-bottom:12px">牌记内容已提交，不可修改。</div>
+      <div class="field">
+        <label>牌记类型</label>
+        <div style="padding:10px 0;color:#333">${g.type || '-'}</div>
+      </div>
+      <div class="field">
+        <label>牌记内容</label>
+        <div style="padding:10px 0;font-size:15px;color:#333;font-weight:500">${g.content || '-'}</div>
+      </div>
+    `);
+  });
 }
 
 // 牌记填写弹窗
@@ -2562,6 +2577,7 @@ function openPlaqueForm() {
     state.myGifts.plaque.type = selectedType;
     state.myGifts.plaque.content = content;
     state.myGifts.plaque.submittedAt = new Date().toISOString();
+    state.myGifts.plaque.locked = true; // 提交后锁定，不可再修改
     closeOverlay();
     showToast('牌记已提交');
     openMyGifts();
@@ -2634,7 +2650,7 @@ function simulateOcr(file, seat) {
         currency: 'CNY',
         transferTime: baseTime.toISOString().slice(0, 19).replace('T', ' '),
         bankName: '中国工商银行嘉兴分行',
-        memo: '新修嘉兴藏 · ' + (books.find(b => b.id === seat.bookId)?.title || seat.bookId),
+        memo: `捐赠人：${state.user?.name || '居士'}，捐赠经书${seat.bookId.replace(/^JX-/, '')}号`,
         fileName: file?.name || 'receipt.jpg',
         fileSize: file?.size || 0,
         // 验真结论
@@ -2660,7 +2676,7 @@ function renderOcrResult(ocr, seat) {
     <div class="ocr-result">
       <div class="ocr-result-head">
         <span class="ocr-icon">⌖</span>
-        <strong>识别完成 · 置信度 ${ocr.verify.score}%</strong>
+        <strong>识别完成</strong>
         <span class="badge ${allOk ? 'gray' : 'gold'}">${allOk ? '凭证有效' : '凭证需核对'}</span>
       </div>
 

@@ -4,3 +4,10 @@ node_modules/
 .env
 .env.*
 Thumbs.db
+
+# 临时文件与开发资源
+_backup/
+_screenshots/
+根目录下的截图与图片（非 assets/）
+*.docx
+使用指南.md 已在下方显式追踪
