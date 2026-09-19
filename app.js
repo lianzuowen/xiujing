@@ -1,4 +1,4 @@
-/* 新修嘉兴藏 · 交互原型（修正版）
+/* 新修大藏经 · 交互原型（修正版）
  * 修正要点：
  *  1) 4 Tab：首页 / 经目 / 公开 / 我的
  *  2) 经目下二级切换：阅藏指南 / 经书目录
@@ -9,7 +9,7 @@
  *  7) 开屏页：进入小程序前的精美启动页
  *  8) 每部经书带 stage（阶段）字段，可预览封面 / 目录 / 一页正文
  *  9) 认捐金额 = 页数 × 200 元（修一页费用固定 200 元）
- * 10) 小程序名称改为"新修嘉兴藏"
+ * 10) 小程序名称改为"新修大藏经"
  */
 
 const STAGES = [
@@ -541,7 +541,7 @@ window.addEventListener('resize', fitDeviceCanvas);
 fitDeviceCanvas();
 
 function statusBar() {
-  return `<div class="statusbar"><span>9:41</span><span>新修嘉兴藏 · 原型</span><span>5G&nbsp;&nbsp;▰</span></div>`;
+  return `<div class="statusbar"><span>9:41</span><span>新修大藏经 · 原型</span><span>5G&nbsp;&nbsp;▰</span></div>`;
 }
 
 function setPage(page) {
@@ -606,14 +606,14 @@ function ensureDemoMySeats() {
 
 /* ========== 开屏页 ========== */
 function renderSplash() {
-  return `<div class="splash" role="dialog" aria-label="新修嘉兴藏小程序开屏">
+  return `<div class="splash" role="dialog" aria-label="新修大藏经小程序开屏">
     <div class="splash-top">
-      <span>新修嘉兴藏 · 大众护持平台</span>
+      <span>新修大藏经 · 大众护持平台</span>
       <span class="splash-stamp">辛卯 · 2026</span>
     </div>
     <img class="splash-lotus" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面">
     <div class="splash-mid">
-      <h1>新修嘉兴藏</h1>
+      <h1>新修大藏经</h1>
       <div class="splash-en">XIN XIU JIA XING DA ZANG JING</div>
       <div class="splash-divider"></div>
       <p class="splash-sub">接续浙地径山、嘉兴刻藏文脉<br>复原完整古藏 · 增补文献 · 传续法宝</p>
@@ -648,7 +648,7 @@ function renderHome() {
     <section class="hero">
       <div class="brandline">
         <img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面">
-        <div><h1>新修嘉兴藏</h1><p>新修嘉兴藏 · 大众护持平台</p></div>
+        <div><h1>新修大藏经</h1><p>新修大藏经 · 大众护持平台</p></div>
       </div>
       <p class="hero-copy">为正本清源、弘法利生，由《嘉兴藏》（重辑·2008版）原班团队接续，引入 AI 与专家团队，重新修复、重新编序、重新增补。</p>
       <div class="hero-actions">
@@ -664,7 +664,7 @@ function renderHome() {
     <section class="intro-section">
       <div class="section-head"><div><h2>项目缘起</h2><p>一场跨越时代的文化传承工程</p></div></div>
       <div class="intro-card">
-        <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修嘉兴藏》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
+        <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修大藏经》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
       </div>
     </section>
 
@@ -1041,7 +1041,8 @@ function getUserActivePledge() {
 function finalizeSeat(seat) {
   const book = books.find(b => b.id === seat.bookId);
   if (!book) return;
-  const certId = `CERT-${formatDate()}-${String(state.certificates.length + 1).padStart(3, '0')}`;
+  const bookShortId = String(book.id).replace(/^JX-/, '').padStart(4, '0');
+  const certId = `CERT-${bookShortId}-${formatDate()}`;
   const date = formatDate2();
   state.certificates = state.certificates || [];
   state.certificates.push({
@@ -1272,7 +1273,7 @@ function renderGuide() {
     ${statusBar()}
     <header class="topbar"><span style="width:44px"></span><h1>阅藏指南</h1><span style="width:44px"></span></header>
     <section class="guide-hero">
-      <h2>新修嘉兴藏 · 阅藏指南</h2>
+      <h2>新修大藏经 · 阅藏指南</h2>
       <p>嘉兴藏是明代方册本大藏经的代表。本次新修以故宫珍藏本为底本，邀大众"以阅入藏、以捐护藏"。</p>
     </section>
     <section class="section">
@@ -1567,7 +1568,7 @@ function renderProfile() {
     <section class="section">
       <div class="card menu">
         <button class="menu-row" data-go="consult"><span class="menu-icon">问</span><span>专项咨询</span><small>›</small></button>
-        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴藏</span><small>›</small></button>
+        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修大藏经</span><small>›</small></button>
       </div>
     </section>
     <section class="section">
@@ -1639,7 +1640,7 @@ function renderProfileGuest() {
     <section class="section">
       <div class="card menu">
         <button class="menu-row" data-go="consult"><span class="menu-icon">问</span><span>专项咨询</span><small>›</small></button>
-        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修嘉兴藏</span><small>›</small></button>
+        <button class="menu-row" data-action="about"><span class="menu-icon">缘</span><span>关于新修大藏经</span><small>›</small></button>
       </div>
     </section>
     <section class="section">
@@ -1892,7 +1893,7 @@ function renderCartPledge() {
     const listHtml = `<div class="cart-pledge-list">${books.map(b => `<div class="cart-pledge-row"><span>${b.title}</span><small>${bookCode(b)} · ${b.section} · ${b.volume}</small><b>¥${b.amount.toLocaleString()}</b></div>`).join('')}</div>`;
     body = `<h3 class="flow-title">阅读并签署捐款协议</h3><p class="flow-desc">本次共认捐 ${count} 部经书，合计 ¥${total.toLocaleString()}。</p>
       ${listHtml}
-      <div class="agreement"><b>《新修嘉兴藏》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
+      <div class="agreement"><b>《新修大藏经》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
       <div class="field" style="margin-top:14px"><label>电子签名</label><canvas id="signature" class="sign-canvas" width="360" height="140"></canvas><div class="sign-tools"><span>请在框内手写签名</span><button class="text-link" id="clear-sign">清除</button></div></div>
       <label class="check" style="margin-top:14px"><input id="agree" type="checkbox"><span>本人已完整阅读、理解并接受协议内容</span></label>`;
     actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>确认签署</button>`;
@@ -1903,7 +1904,7 @@ function renderCartPledge() {
       ${listHtml}
       <div class="payee-box">
         <div class="payee-box-head">请于 <b>${LOCK_DAYS} 天内</b> 向上述收款账户完成合计转账。</div>
-        <div class="payee-box-row"><span>收款方</span><b>新修嘉兴藏项目组</b></div>
+        <div class="payee-box-row"><span>收款方</span><b>新修大藏经项目组</b></div>
         <div class="payee-box-row">
           <span>收款账户</span>
           <b class="payee-account">${PAYMENT_ACCOUNT}</b>
@@ -1914,7 +1915,7 @@ function renderCartPledge() {
       </div>
       <div class="payee-tips">
         <div class="payee-tip">⏰ 请在 <b>${LOCK_DAYS} 天内</b> 留意【经目 → 认捐中】中各经书的凭证上传情况。</div>
-        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明：每部经书的<b>经书编号 + 捐赠者姓名</b>。</div>
+        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中按格式注明（每部经书各附一次）：<br><b>捐赠人：姓名，捐赠经书编号：0001，经书名称：经名</b></div>
       </div>
       <div class="notice">转账完成后，<b>无需自己上传凭证</b>——管理员在银行账户收到您的汇款后，将在【经目 → 认捐中】为您上传收款凭证并确认认捐。</div>`;
     actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>锁定全部席位</button>`;
@@ -2018,10 +2019,10 @@ function nextCartPledge() {
 
 /* ========== 关于弹窗 ========== */
 function openAbout() {
-  openInfo('关于新修嘉兴藏', `
+  openInfo('关于新修大藏经', `
     <div class="section-head" style="padding:0;margin-bottom:12px"><h2>项目缘起</h2></div>
     <div class="protocol-block">
-      <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修嘉兴藏》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
+      <p>项目组历经十年努力，于 2008 年完成《嘉兴藏》（重辑·2008版），由民族出版社出版。其间留下两个遗憾：<b>增补内容有限、古籍修复有限</b>。经多方努力，自 2022 年起启动《新修大藏经》工作，旨在通过古籍修复、内容重组、现代阐释及增补文献，编纂出一部<b>继承传统、发展创新的盛世大藏</b>。</p>
     </div>
     <div class="section-head" style="padding:0;margin:14px 0 8px"><h2>底本特色</h2></div>
     <div class="protocol-block">
@@ -2168,7 +2169,7 @@ function renderPledge() {
     actions = `<button class="btn btn-ghost" data-close>取消</button><button class="btn btn-primary" data-next>注册并继续</button>`;
   } else if (state.pledgeStep === 1) {
     body = `<h3 class="flow-title">阅读并签署捐款协议</h3><p class="flow-desc">认捐经书：${state.selectedBook.title}（共${state.selectedBook.pages}页）</p>
-      <div class="agreement"><b>《新修嘉兴藏》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分，可在平台购物时使用（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
+      <div class="agreement"><b>《新修大藏经》项目捐款协议（原型摘要）</b><br>一、捐款人自愿护持本项目，所捐款项用于对应经书的古籍修复、内容编校、专家复核及相关工作。<br>二、项目方定期公开资金用途与修藏进度，并为每笔捐款生成唯一可验证记录。<br>三、捐款完成后自动获得等额莲座问积分，可在平台购物时使用（功德主双倍积分）。<br>四、捐款人可选择公开称谓或匿名展示。</div>
       <div class="field" style="margin-top:14px"><label>电子签名</label><canvas id="signature" class="sign-canvas" width="360" height="140"></canvas><div class="sign-tools"><span>请在框内手写签名</span><button class="text-link" id="clear-sign">清除</button></div></div>
       <div class="field" style="margin-top:14px">
         <label>常住地区</label>
@@ -2200,7 +2201,7 @@ function renderPledge() {
       <!-- ★ 收款账户信息 + 转账须知 -->
       <div class="payee-box">
         <div class="payee-box-head">请点击下方「锁定席位」后，于 <b>${LOCK_DAYS} 天内</b> 向上述收款账户完成转账。</div>
-        <div class="payee-box-row"><span>收款方</span><b>新修嘉兴藏项目组</b></div>
+        <div class="payee-box-row"><span>收款方</span><b>新修大藏经项目组</b></div>
         <div class="payee-box-row">
           <span>收款账户</span>
           <b class="payee-account">${PAYMENT_ACCOUNT}</b>
@@ -2211,7 +2212,7 @@ function renderPledge() {
       </div>
       <div class="payee-tips">
         <div class="payee-tip">⏰ 请在 <b>${LOCK_DAYS} 天内</b> 留意【经目 → 认捐中】中本经书的凭证上传情况。</div>
-        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明：<b>${state.selectedBook.id} · ${state.user.name || state.user.code}</b>（经书编号 + 捐赠者姓名）。</div>
+        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中按格式注明：<br><b>捐赠人：${state.user.name || state.user.code}，捐赠经书编号：${state.selectedBook.id.replace(/^JX-/, '').padStart(4, '0')}，经书名称：${state.selectedBook.title}</b></div>
       </div>
       <div class="notice">转账完成后，<b>无需自己上传凭证</b>——管理员在银行账户收到您的汇款后，将在【经目 → 认捐中】为您上传收款凭证并确认认捐。</div>`;
     actions = `<button class="btn btn-ghost" data-prev>上一步</button><button class="btn btn-primary" data-next>锁定席位</button>`;
@@ -2244,7 +2245,7 @@ function renderPledge() {
         <div class="payee-box-row"><span>到期时间</span><b>${expiresAtShort}</b></div>
       </div>
       <div class="payee-tips" style="margin-top:10px">
-        <div class="payee-tip">📝 支付时需在<b>备注/附言</b>中注明<b>捐赠人与捐赠经书编号</b></div>
+        <div class="payee-tip">📝 转账附言（请按格式填写）：<br><b>捐赠人：${state.user.name || state.user.code}，捐赠经书编号：${(state.selectedBook.id || '').replace(/^JX-/, '').padStart(4, '0')}，经书名称：${state.selectedBook.title}</b></div>
       </div>`;
     actions = `<button class="btn btn-primary" data-close>完成</button>`;
   }
@@ -2350,11 +2351,11 @@ function setupSignature() {
 }
 
 function certificateHtml(certificate = {}) {
-  const id = certificate.id || 'CERT-20260816-001';
-  const book = certificate.book || state.selectedBook?.title || '新修嘉兴藏';
+  const id = certificate.id || 'CERT-0001-20260816';
+  const book = certificate.book || state.selectedBook?.title || '新修大藏经';
   const amount = certificate.amount || state.amount;
   const name = state.user?.name || '莲心居士';
-  return `<div class="certificate"><img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面"><h3>修藏荣誉证书</h3><p>兹敬谢 <b>${name}</b><br>发心护持《${book}》<br>护持金额 ¥${amount.toLocaleString()}</p><small>证书编号：${id}</small></div>`;
+  return `<div class="certificate"><img class="logo" src="assets/puxian-cover-fixed.jpg" alt="普贤行愿品封面"><h3>荣誉证书</h3><p>兹敬谢 <b>${name}</b><br>发心护持《${book}》<br>护持金额 ¥${amount.toLocaleString()}</p><small>证书编号：${id}</small></div>`;
 }
 
 // 二维码相关代码（qrHtml / 在线认证）已从证书中移除，函数保留以避免外部误调用
@@ -2516,7 +2517,7 @@ function openMyGifts() {
       <div class="empty">
         完成认捐后将自动获得 3 项赠品：<br>
         ① 嘉兴藏阅藏指南（电子版）<br>
-        ② 牌记（吉祥牌/操作牌）<br>
+        ② 牌记（吉祥牌/超度牌）<br>
         ③ 三德弘法中心祈福法会一次
       </div>`);
     return;
@@ -2622,17 +2623,17 @@ function openPlaqueForm() {
           <div class="pt-name">吉祥牌</div>
           <div class="pt-desc">镌刻吉祥语、祈愿词或祝福寄语</div>
         </div>
-        <div class="plaque-type-card ${g.type === '操作牌' ? 'selected' : ''}" data-type="操作牌">
-          <div class="pt-icon">作</div>
-          <div class="pt-name">操作牌</div>
-          <div class="pt-desc">镌刻功德主姓名、护持事项等具体操作信息</div>
+        <div class="plaque-type-card ${g.type === '超度牌' ? 'selected' : ''}" data-type="超度牌">
+          <div class="pt-icon">度</div>
+          <div class="pt-name">超度牌</div>
+          <div class="pt-desc">镌刻逝者姓名、超度对象等具体超度信息</div>
         </div>
       </div>
     </div>
 
     <div class="field">
       <label>牌记内容</label>
-      <textarea id="plaque-content" placeholder="${g.type === '吉祥牌' ? '请填写吉祥语、祈愿词或祝福寄语（不超过 30 字）' : '请填写姓名、护持事项等具体操作信息（不超过 30 字）'}" maxlength="30">${g.content || ''}</textarea>
+      <textarea id="plaque-content" placeholder="${g.type === '吉祥牌' ? '请填写吉祥语、祈愿词或祝福寄语（不超过 30 字）' : '请填写逝者姓名、超度对象等具体超度信息（不超过 30 字）'}" maxlength="30">${g.content || ''}</textarea>
       <small style="color:#786b58;font-size:11px">字数限制 30 字以内</small>
     </div>
     <div class="notice">提交后项目组将根据牌记内容排版上版；一经镌刻不可修改，请仔细核对。</div>
@@ -2695,14 +2696,14 @@ function openPointsDetail() {
 
 function openVerify(fromSuccess = false) {
   openSheet('证书在线认证', `
-    <div class="field"><label>证书编号</label><input id="cert-code" value="${state.certificates.at(-1)?.id || 'CERT-20260816-001'}" placeholder="请输入证书编号"></div>
+    <div class="field"><label>证书编号</label><input id="cert-code" value="${state.certificates.at(-1)?.id || 'CERT-0001-20260816'}" placeholder="请输入证书编号"></div>
     <button class="btn btn-primary btn-block" id="check-cert">立即验证</button>
     <div id="verify-result"></div>
   `, `<button class="btn btn-block btn-ghost" data-close>关闭</button>`);
   const actions = overlayRoot.querySelector('.sheet-actions');
   if (actions) actions.style.gridTemplateColumns = '1fr';
   document.querySelector('#check-cert')?.addEventListener('click', () => {
-    document.querySelector('#verify-result').innerHTML = `<div class="notice" style="margin-top:14px"><b>验证通过</b><br>证书签发主体：新修嘉兴藏项目组<br>状态：有效 · 存证记录一致</div>`;
+    document.querySelector('#verify-result').innerHTML = `<div class="notice" style="margin-top:14px"><b>验证通过</b><br>证书签发主体：新修大藏经项目组<br>状态：有效 · 存证记录一致</div>`;
   });
   if (fromSuccess) document.querySelector('#check-cert')?.click();
 }
@@ -2720,7 +2721,7 @@ function simulateOcr(file, seat) {
       const ocr = {
         // 收款账户：与系统账户对比的字段
         payeeAccount: PAYMENT_ACCOUNT,
-        payeeName: '新修嘉兴藏项目组',
+        payeeName: '新修大藏经项目组',
         // 付款账户（来自凭证）
         payerAccount: random < 0.2 ? '6225 **** **** ' + String(1000 + Math.floor(Math.random() * 9000)) : '6217 **** **** ' + String(1000 + Math.floor(Math.random() * 9000)),
         payerName: state.user?.name || '居士',
@@ -2729,7 +2730,7 @@ function simulateOcr(file, seat) {
         currency: 'CNY',
         transferTime: baseTime.toISOString().slice(0, 19).replace('T', ' '),
         bankName: '中国工商银行嘉兴分行',
-        memo: `捐赠人：${state.user?.name || '居士'}，捐赠经书${seat.bookId.replace(/^JX-/, '')}号`,
+        memo: `捐赠人：${state.user?.name || '居士'}，捐赠经书编号：${seat.bookId.replace(/^JX-/, '').padStart(4, '0')}，经书名称：${books.find(b => b.id === seat.bookId)?.title || seat.bookId}`,
         fileName: file?.name || 'receipt.jpg',
         fileSize: file?.size || 0,
         // 验真结论
@@ -2802,7 +2803,8 @@ function viewReceipt(seatId) {
         <b>凭证尚未上传</b><br>
         本席位（${seat.seatId}）当前尚未上传收款凭证。<br>
         管理员在银行账户收到您的汇款后，将上传凭证并确认认捐。<br><br>
-        <b>请在备注中注明捐赠人与捐赠经书编号</b><br>
+        <b>转账附言（请按此格式填写）：</b><br>
+        捐赠人：${seat.userName || '居士'}，捐赠经书编号：${seat.bookId.replace(/^JX-/, '').padStart(4, '0')}，经书名称：${book?.title || seat.bookId}<br>
         <b>应转金额：</b>¥${seat.amount.toLocaleString()}<br>
         <b>收款账户：</b>${PAYMENT_ACCOUNT}
       </div>
@@ -3027,7 +3029,7 @@ function issueGifts(seat, ocr) {
     },
     plaque: {
       issued: true,
-      type: null,       // 等待用户选 吉祥牌/操作牌
+      type: null,       // 等待用户选 吉祥牌/超度牌
       content: '',      // 等待用户填写
       desc: GIFT_TYPES.plaque.name
     },
